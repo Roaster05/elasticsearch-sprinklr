@@ -63,7 +63,13 @@ public class HierarchyCircuitBreakerService extends CircuitBreakerService {
         true,
         Property.NodeScope
     );
-
+    // Implemented a modified circuit breaker boolean setting which is dynamic initialised as false
+    public static final Setting<Boolean> USE_MODIFIED_CIRCUIT_BREAKER_SETTING = Setting.boolSetting(
+        "indices.breaker.total.use_modified_circuit_breaker",
+        false,
+        Property.Dynamic,
+        Property.NodeScope
+    );
     public static final Setting<ByteSizeValue> TOTAL_CIRCUIT_BREAKER_LIMIT_SETTING = Setting.memorySizeSetting(
         "indices.breaker.total.limit",
         settings -> {
@@ -158,6 +164,7 @@ public class HierarchyCircuitBreakerService extends CircuitBreakerService {
     );
 
     private final boolean trackRealMemoryUsage;
+    private boolean modifiedCircuitBreaker;
     private volatile BreakerSettings parentSettings;
 
     // Tripped count for when redistribution was attempted but wasn't successful
@@ -166,13 +173,13 @@ public class HierarchyCircuitBreakerService extends CircuitBreakerService {
     private final OverLimitStrategy overLimitStrategy;
 
     public HierarchyCircuitBreakerService(Settings settings, List<BreakerSettings> customBreakers, ClusterSettings clusterSettings) {
-        this(settings, customBreakers, clusterSettings, HierarchyCircuitBreakerService::createOverLimitStrategy);
+        this(settings, customBreakers, clusterSettings,false, HierarchyCircuitBreakerService::createOverLimitStrategy);
     }
 
     HierarchyCircuitBreakerService(
         Settings settings,
         List<BreakerSettings> customBreakers,
-        ClusterSettings clusterSettings,
+        ClusterSettings clusterSettings,boolean modifiedCircuitBreaker,
         Function<Boolean, OverLimitStrategy> overLimitStrategyFactory
     ) {
         super();
@@ -246,7 +253,13 @@ public class HierarchyCircuitBreakerService extends CircuitBreakerService {
         logger.trace(() -> new ParameterizedMessage("parent circuit breaker with settings {}", this.parentSettings));
 
         this.trackRealMemoryUsage = USE_REAL_MEMORY_USAGE_SETTING.get(settings);
+        this.modifiedCircuitBreaker = USE_MODIFIED_CIRCUIT_BREAKER_SETTING.get(settings);
 
+        clusterSettings.addSettingsUpdateConsumer(
+            USE_MODIFIED_CIRCUIT_BREAKER_SETTING,
+            this::setModifiedCircuitBreaker
+
+        );
         clusterSettings.addSettingsUpdateConsumer(
             TOTAL_CIRCUIT_BREAKER_LIMIT_SETTING,
             this::setTotalCircuitBreakerLimit,
@@ -303,6 +316,10 @@ public class HierarchyCircuitBreakerService extends CircuitBreakerService {
 
     private void setTotalCircuitBreakerLimit(ByteSizeValue byteSizeValue) {
         this.parentSettings = new BreakerSettings(CircuitBreaker.PARENT, byteSizeValue.getBytes(), 1.0, CircuitBreaker.Type.PARENT, null);
+    }
+
+    private void setModifiedCircuitBreaker(boolean circuitBreakerOption) {
+        this.modifiedCircuitBreaker = circuitBreakerOption;
     }
 
     /**
@@ -416,7 +433,8 @@ public class HierarchyCircuitBreakerService extends CircuitBreakerService {
     public void checkParentLimit(long newBytesReserved, String label) throws CircuitBreakingException {
         final MemoryUsage memoryUsed = memoryUsed(newBytesReserved);
         long parentLimit = this.parentSettings.getLimit();
-        if (memoryUsed.totalUsage > parentLimit && overLimitStrategy.overLimit(memoryUsed).totalUsage > parentLimit) {
+        boolean startsWithAgg = label.startsWith("[agg]");
+        if (memoryUsed.totalUsage > parentLimit && overLimitStrategy.overLimit(memoryUsed).totalUsage > parentLimit && (!modifiedCircuitBreaker || startsWithAgg)) {
             this.parentTripCount.incrementAndGet();
             final String messageString = buildParentTripMessage(
                 newBytesReserved,
