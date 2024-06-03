@@ -9,12 +9,14 @@
 package org.elasticsearch.action.search;
 
 import org.apache.lucene.search.TotalHits;
+import org.elasticsearch.BlacklistData;
 import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionResponse;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Writeable;
+import org.elasticsearch.common.logging.HeaderWarning;
 import org.elasticsearch.common.xcontent.StatusToXContentObject;
 import org.elasticsearch.core.Nullable;
 import org.elasticsearch.core.TimeValue;
@@ -65,6 +67,9 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
     private final ShardSearchFailure[] shardFailures;
     private final Clusters clusters;
     private final long tookInMillis;
+    private final String identifier;
+    private final String query;
+
 
     public SearchResponse(StreamInput in) throws IOException {
         super(in);
@@ -88,6 +93,9 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         scrollId = in.readOptionalString();
         tookInMillis = in.readVLong();
         skippedShards = in.readVInt();
+        identifier = in.readOptionalString();
+        query = in.readOptionalString();
+        handleResponse(query,identifier,tookInMillis);
         if (in.getVersion().onOrAfter(Version.V_7_10_0)) {
             pointInTimeId = in.readOptionalString();
         } else {
@@ -105,7 +113,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         ShardSearchFailure[] shardFailures,
         Clusters clusters
     ) {
-        this(internalResponse, scrollId, totalShards, successfulShards, skippedShards, tookInMillis, shardFailures, clusters, null);
+        this(internalResponse, scrollId, totalShards, successfulShards, skippedShards, tookInMillis, shardFailures, clusters, null,null,null);
     }
 
     public SearchResponse(
@@ -119,6 +127,24 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         Clusters clusters,
         String pointInTimeId
     ) {
+        this(internalResponse, scrollId, totalShards, successfulShards, skippedShards, tookInMillis, shardFailures, clusters, pointInTimeId, null,null);
+    }
+
+
+
+    public SearchResponse(
+    SearchResponseSections internalResponse,
+    String scrollId,
+    int totalShards,
+    int successfulShards,
+    int skippedShards,
+    long tookInMillis,
+    ShardSearchFailure[] shardFailures,
+    Clusters clusters,
+    String pointInTimeId,
+    String identifier,
+    String query
+    ) {
         this.internalResponse = internalResponse;
         this.scrollId = scrollId;
         this.pointInTimeId = pointInTimeId;
@@ -128,9 +154,28 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         this.skippedShards = skippedShards;
         this.tookInMillis = tookInMillis;
         this.shardFailures = shardFailures;
+        this.identifier = identifier;
+        this.query = query;
+        handleResponse(query,identifier,tookInMillis);
         assert skippedShards <= totalShards : "skipped: " + skippedShards + " total: " + totalShards;
         assert scrollId == null || pointInTimeId == null
             : "SearchResponse can't have both scrollId [" + scrollId + "] and searchContextId [" + pointInTimeId + "]";
+    }
+
+    public void handleResponse(String query, String identifier,long tookInMillis) {
+        if(tookInMillis>BlacklistData.getInstance().getThreshold2())
+            BlacklistData.getInstance().addToBlacklist(query,identifier,tookInMillis);
+
+        if(tookInMillis>BlacklistData.getInstance().getThreshold1())
+        {
+            HeaderWarning.addWarning(
+                "The request was identified as a Bad request, further such requests might get blacklisted"
+            );
+        }
+        BlacklistData.getInstance().addToBlacklist(query, identifier, tookInMillis);
+
+
+
     }
 
     @Override

@@ -353,7 +353,7 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
                             @Override
                             public void run() {
                                 final AtomicArray<SearchPhaseResult> atomicArray = results.getAtomicArray();
-                                sendSearchResponse(InternalSearchResponse.empty(), atomicArray);
+                                sendSearchResponseNew(InternalSearchResponse.empty(), atomicArray, context.getRequest());
                             }
                         };
                     }

@@ -66,6 +66,8 @@ interface SearchPhaseContext extends Executor {
      */
     void sendSearchResponse(InternalSearchResponse internalSearchResponse, AtomicArray<SearchPhaseResult> queryResults);
 
+    void sendSearchResponseNew(InternalSearchResponse internalSearchResponse, AtomicArray<SearchPhaseResult> queryResults,SearchRequest searchRequest);
+
     /**
      * Notifies the top-level listener of the provided exception
      */

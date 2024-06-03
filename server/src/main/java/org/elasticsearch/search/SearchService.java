@@ -14,6 +14,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.lucene.search.FieldDoc;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.TopDocs;
+import org.elasticsearch.BlacklistData;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.ElasticsearchTimeoutException;
 import org.elasticsearch.Version;
@@ -147,6 +148,28 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
     private static final Logger logger = LogManager.getLogger(SearchService.class);
 
     // we can have 5 minutes here, since we make sure to clean with search requests and when shard/index closes
+    public static final Setting<Integer> BLACKLIST_THRESHOLD1 = Setting.intSetting(
+        "search.blacklist_threshold1",
+        30000,
+        0,
+        Property.Dynamic,
+        Property.NodeScope
+
+    );
+    public static final Setting<Integer> BLACKLIST_THRESHOLD2 = Setting.intSetting(
+        "search.blacklist_threshold2",
+        10000,
+        0,
+        Property.Dynamic,
+        Property.NodeScope
+
+    );
+    public  static final Setting<Boolean>BLACKLIST_RESET = Setting.boolSetting(
+        "search.blacklist_reset",
+        false,
+        Property.NodeScope,
+        Property.Dynamic
+    );
     public static final Setting<TimeValue> DEFAULT_KEEPALIVE_SETTING = Setting.positiveTimeSetting(
         "search.default_keep_alive",
         timeValueMinutes(5),
@@ -300,6 +323,13 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
         clusterService.getClusterSettings()
             .addSettingsUpdateConsumer(DEFAULT_KEEPALIVE_SETTING, MAX_KEEPALIVE_SETTING, this::setKeepAlives, this::validateKeepAlives);
 
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(BLACKLIST_THRESHOLD1, this::setBlacklistThreshold1);
+
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(BLACKLIST_THRESHOLD2, this::setBlacklistThreshold2);
+
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(BLACKLIST_RESET, this::setBlacklistReset);
+
+
         this.keepAliveReaper = threadPool.scheduleWithFixedDelay(new Reaper(), keepAliveInterval, Names.SAME);
 
         defaultSearchTimeout = DEFAULT_SEARCH_TIMEOUT_SETTING.get(settings);
@@ -346,6 +376,20 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
 
     private void setDefaultSearchTimeout(TimeValue defaultSearchTimeout) {
         this.defaultSearchTimeout = defaultSearchTimeout;
+    }
+
+    private void setBlacklistThreshold1(int threshold1) {
+        BlacklistData.getInstance().setThreshold1(threshold1);
+    }
+
+    private void setBlacklistThreshold2(int threshold2) {
+        BlacklistData.getInstance().setThreshold2(threshold2);
+    }
+
+    private void setBlacklistReset(boolean blacklistReset)
+    {
+        if(blacklistReset)
+            BlacklistData.getInstance().resetStorage();
     }
 
     private void setDefaultAllowPartialSearchResults(boolean defaultAllowPartialSearchResults) {

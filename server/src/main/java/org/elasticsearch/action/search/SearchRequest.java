@@ -107,6 +107,10 @@ public class SearchRequest extends ActionRequest implements IndicesRequest.Repla
 
     private TimeValue waitForCheckpointsTimeout = TimeValue.timeValueSeconds(30);
 
+    private String identifier;
+
+    private String query;
+
     public SearchRequest() {
         this((Version) null);
     }
@@ -117,6 +121,25 @@ public class SearchRequest extends ActionRequest implements IndicesRequest.Repla
         this.finalReduce = true;
         this.minCompatibleShardNode = minCompatibleShardNode;
         this.ccsMinimizeRoundtrips = minCompatibleShardNode == null;
+    }
+
+
+    public void setIdentifier(String identifier) {
+        this.identifier = identifier;
+    }
+
+    public String getIdentifier() {
+        return identifier;
+    }
+
+    public void setQuery(String query)
+    {
+        this.query = query;
+    }
+
+    public String getQuery()
+    {
+        return query;
     }
 
     /**

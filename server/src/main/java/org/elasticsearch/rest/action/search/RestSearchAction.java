@@ -8,6 +8,9 @@
 
 package org.elasticsearch.rest.action.search;
 
+import org.elasticsearch.BlacklistData;
+import org.elasticsearch.ElasticsearchBlacklistException;
+import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionRequestValidationException;
@@ -38,13 +41,17 @@ import org.elasticsearch.search.suggest.term.TermSuggestionBuilder.SuggestMode;
 import org.elasticsearch.xcontent.XContentParser;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.IntConsumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.unmodifiableList;
@@ -92,6 +99,50 @@ public class RestSearchAction extends BaseRestHandler {
         );
     }
 
+    public static String roundNumbers(String queryContent) {
+        Pattern numberPattern = Pattern.compile("\\d+");
+        Matcher matcher = numberPattern.matcher(queryContent);
+        StringBuffer sb = new StringBuffer();
+
+        while (matcher.find()) {
+            int number = Integer.parseInt(matcher.group());
+            int roundedNumber = roundToNearest(number);
+            matcher.appendReplacement(sb, String.valueOf(roundedNumber));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    private static int roundToNearest(int number) {
+        if (number < 10) return number;
+
+        return (int) Math.log10(number);
+    }
+
+
+    public void handleRequest(String query, String identifier) throws ElasticsearchException {
+        int ex = BlacklistData.getInstance().shouldAllowRequest(query, identifier);
+        if (ex==0) {
+            return;
+        } else if(ex==1)  {
+            throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: " + identifier+"as this query has been blacklisted");
+        }
+        else
+            throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: " + identifier+"as this identifier has been blacklisted");
+    }
+
+    public static String extractLocalAddress(String input) {
+        String pattern = "localAddress=([^,]+)";
+        Pattern r = Pattern.compile(pattern);
+        Matcher m = r.matcher(input);
+
+        if (m.find()) {
+            return m.group(1); // Return the captured group (the localAddress value)
+        } else {
+            return null; // Return null if no match is found
+        }
+    }
+
     @Override
     public RestChannelConsumer prepareRequest(final RestRequest request, final NodeClient client) throws IOException {
         SearchRequest searchRequest;
@@ -100,6 +151,12 @@ public class RestSearchAction extends BaseRestHandler {
         } else {
             searchRequest = new SearchRequest();
         }
+
+
+        // Extract the JSON portion
+        String simplifiedQuery = roundNumbers(request.content().utf8ToString());
+        String simplifiedIdentifier = extractLocalAddress(request.getHttpChannel().toString());
+        handleRequest(simplifiedQuery + "[]" + request.rawPath(),simplifiedIdentifier);
         /*
          * We have to pull out the call to `source().size(size)` because
          * _update_by_query and _delete_by_query uses this same parsing
@@ -112,6 +169,8 @@ public class RestSearchAction extends BaseRestHandler {
          * be null later. If that is confusing to you then you are in good
          * company.
          */
+        searchRequest.setIdentifier(simplifiedIdentifier);
+        searchRequest.setQuery(simplifiedQuery + "[]" + request.rawPath());
         IntConsumer setSize = size -> searchRequest.source().size(size);
         request.withContentOrSourceParamParserOrNull(
             parser -> parseSearchRequest(searchRequest, request, parser, client.getNamedWriteableRegistry(), setSize)

@@ -680,6 +680,35 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
         );
     }
 
+    private SearchResponse buildSearchResponseNew(
+        InternalSearchResponse internalSearchResponse,
+        ShardSearchFailure[] failures,
+        String scrollId,
+        String searchContextId,
+        SearchRequest searchRequest
+    ) {
+        String identifier=searchRequest.getIdentifier();
+        String query = searchRequest.getQuery();
+        int numSuccess = successfulOps.get();
+        int numFailures = failures.length;
+        assert numSuccess + numFailures == getNumShards()
+            : "numSuccess(" + numSuccess + ") + numFailures(" + numFailures + ") != totalShards(" + getNumShards() + ")";
+        return new SearchResponse(
+            internalSearchResponse,
+            scrollId,
+            getNumShards(),
+            numSuccess,
+            skippedOps.get(),
+            buildTookInMillis(),
+            failures,
+            clusters,
+            searchContextId,
+            identifier,
+            query
+        );
+    }
+
+    // whatt
     boolean buildPointInTimeFromSearchResults() {
         return false;
     }
@@ -705,6 +734,30 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
                 }
             }
             listener.onResponse(buildSearchResponse(internalSearchResponse, failures, scrollId, searchContextId));
+        }
+    }
+
+    @Override
+    public void sendSearchResponseNew(InternalSearchResponse internalSearchResponse, AtomicArray<SearchPhaseResult> queryResults, SearchRequest searchRequest) {
+        ShardSearchFailure[] failures = buildShardFailures();
+        Boolean allowPartialResults = request.allowPartialSearchResults();
+        assert allowPartialResults != null : "SearchRequest missing setting for allowPartialSearchResults";
+        if (allowPartialResults == false && failures.length > 0) {
+            raisePhaseFailure(new SearchPhaseExecutionException("", "Shard failures", null, failures));
+        } else {
+            final Version minNodeVersion = clusterState.nodes().getMinNodeVersion();
+            final String scrollId = request.scroll() != null ? TransportSearchHelper.buildScrollId(queryResults, minNodeVersion) : null;
+            final String searchContextId;
+            if (buildPointInTimeFromSearchResults()) {
+                searchContextId = SearchContextId.encode(queryResults.asList(), aliasFilter, minNodeVersion);
+            } else {
+                if (request.source() != null && request.source().pointInTimeBuilder() != null) {
+                    searchContextId = request.source().pointInTimeBuilder().getEncodedId();
+                } else {
+                    searchContextId = null;
+                }
+            }
+            listener.onResponse(buildSearchResponseNew(internalSearchResponse, failures, scrollId, searchContextId,searchRequest));
         }
     }
 
