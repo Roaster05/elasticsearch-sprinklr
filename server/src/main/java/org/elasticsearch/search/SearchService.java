@@ -150,7 +150,7 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
     // we can have 5 minutes here, since we make sure to clean with search requests and when shard/index closes
     public static final Setting<Integer> BLACKLIST_THRESHOLD1 = Setting.intSetting(
         "search.blacklist_threshold1",
-        30000,
+        3000,
         0,
         Property.Dynamic,
         Property.NodeScope
@@ -158,13 +158,19 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
     );
     public static final Setting<Integer> BLACKLIST_THRESHOLD2 = Setting.intSetting(
         "search.blacklist_threshold2",
-        10000,
+        1000,
         0,
         Property.Dynamic,
         Property.NodeScope
 
     );
-    public  static final Setting<Boolean>BLACKLIST_RESET = Setting.boolSetting(
+    public static final Setting<Boolean>BLACKLIST_ALLOWED = Setting.boolSetting(
+        "search.blacklist_allowed",
+        false,
+        Property.Dynamic,
+        Property.NodeScope
+    );
+    public static final Setting<Boolean>BLACKLIST_RESET = Setting.boolSetting(
         "search.blacklist_reset",
         false,
         Property.NodeScope,
@@ -329,6 +335,8 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
 
         clusterService.getClusterSettings().addSettingsUpdateConsumer(BLACKLIST_RESET, this::setBlacklistReset);
 
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(BLACKLIST_ALLOWED, this::setBlacklistAllowed);
+
 
         this.keepAliveReaper = threadPool.scheduleWithFixedDelay(new Reaper(), keepAliveInterval, Names.SAME);
 
@@ -391,6 +399,12 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
         if(blacklistReset)
             BlacklistData.getInstance().resetStorage();
     }
+
+    private void setBlacklistAllowed(boolean blacklistAllowed)
+    {
+        BlacklistData.getInstance().setAllowed(blacklistAllowed);
+    }
+
 
     private void setDefaultAllowPartialSearchResults(boolean defaultAllowPartialSearchResults) {
         this.defaultAllowPartialSearchResults = defaultAllowPartialSearchResults;

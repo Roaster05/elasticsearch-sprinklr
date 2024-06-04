@@ -14,8 +14,9 @@ public class BlacklistData {
     private static BlacklistData instance;
     private List<BlacklistEntry> blacklist;
     private final ScheduledExecutorService scheduler;
-    public long threshold1 = 30000;
-    public long threshold2 = 10000;
+    public long threshold1 = 3000;
+    public long threshold2 = 1000;
+    public boolean allowed = false;
 
     private BlacklistData() {
         blacklist = new ArrayList<>();
@@ -42,6 +43,8 @@ public class BlacklistData {
         return threshold2;
     }
 
+    public boolean getAllowed() { return allowed; }
+
     public void setThreshold1(long threshold1) {
         this.threshold1 = threshold1;
     }
@@ -50,12 +53,17 @@ public class BlacklistData {
         this.threshold2 = threshold2;
     }
 
+    public void setAllowed(boolean allowed) { this.allowed = allowed; }
+
     public void addToBlacklist(String query, String identifier, long tookInMillis) {
         blacklist.add(new BlacklistEntry(query, identifier, tookInMillis, LocalDateTime.now()));
     }
 
     @SuppressWarnings({"checkstyle:MissingJavadocMethod", "checkstyle:DescendantToken"})
     public int shouldAllowRequest(String query, String identifier) {
+
+        if(!allowed)
+            return 0;
 
         double identifierScore = 0.0;
 
