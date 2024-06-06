@@ -2,8 +2,6 @@ package org.elasticsearch;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -12,14 +10,14 @@ import java.util.concurrent.TimeUnit;
 @SuppressWarnings("checkstyle:MissingJavadocType")
 public class BlacklistData {
     private static BlacklistData instance;
-    private List<BlacklistEntry> blacklist;
+    private Blacklist blacklist;
     private final ScheduledExecutorService scheduler;
     public long threshold1 = 3000;
     public long threshold2 = 1000;
     public boolean allowed = false;
 
     private BlacklistData() {
-        blacklist = new ArrayList<>();
+        blacklist = new Blacklist();
         scheduler = Executors.newScheduledThreadPool(1);
         startDecayTask();
     }
@@ -31,7 +29,34 @@ public class BlacklistData {
         return instance;
     }
 
-    public List<BlacklistEntry> getBlacklist() {
+    @SuppressWarnings("checkstyle:DescendantToken")
+    public synchronized Blacklist getBlacklist(Blacklist newEntries) {
+        if (newEntries == null) {
+            return blacklist;
+        }
+
+        for (BlacklistEntry newEntry : newEntries.getEntries()) {
+            boolean exists = blacklist.getEntries().stream().anyMatch(entry ->
+                Objects.equals(entry.getQuery(), newEntry.getQuery()) &&
+                    Objects.equals(entry.getIdentifier(), newEntry.getIdentifier()) &&
+                    Objects.equals(entry.getExecutionTime(), newEntry.getExecutionTime()) &&
+                    Objects.equals(entry.getTimestamp(), newEntry.getTimestamp())
+            );
+            if (!exists) {
+                blacklist.addEntry(newEntry);
+            }
+        }
+
+        return blacklist;
+    }
+
+    public void setBlacklist(Blacklist newEntries) {
+        if (newEntries != null) {
+            this.blacklist = newEntries;
+        }
+    }
+
+    public Blacklist getBlacklist() {
         return blacklist;
     }
 
@@ -43,7 +68,9 @@ public class BlacklistData {
         return threshold2;
     }
 
-    public boolean getAllowed() { return allowed; }
+    public boolean getAllowed() {
+        return allowed;
+    }
 
     public void setThreshold1(long threshold1) {
         this.threshold1 = threshold1;
@@ -53,21 +80,26 @@ public class BlacklistData {
         this.threshold2 = threshold2;
     }
 
-    public void setAllowed(boolean allowed) { this.allowed = allowed; }
+    public void setAllowed(boolean allowed) {
+        this.allowed = allowed;
+    }
 
+    @SuppressWarnings("checkstyle:DescendantToken")
     public void addToBlacklist(String query, String identifier, long tookInMillis) {
-        blacklist.add(new BlacklistEntry(query, identifier, tookInMillis, LocalDateTime.now()));
+        if (query != null && !query.contains("kibana")) {
+            blacklist.addEntry(new BlacklistEntry(query, identifier, tookInMillis, LocalDateTime.now()));
+        }
     }
 
     @SuppressWarnings({"checkstyle:MissingJavadocMethod", "checkstyle:DescendantToken"})
     public int shouldAllowRequest(String query, String identifier) {
-
-        if(!allowed)
+        if (!allowed) {
             return 0;
+        }
 
         double identifierScore = 0.0;
 
-        for (BlacklistEntry entry : blacklist) {
+        for (BlacklistEntry entry : blacklist.getEntries()) {
             if (Objects.equals(entry.getIdentifier(), identifier)) {
                 if (entry.getExecutionTime() > threshold1) {
                     identifierScore += 1.5;
@@ -77,19 +109,19 @@ public class BlacklistData {
             }
         }
 
-
-        if(identifierScore>=20)
+        if (identifierScore >= 20) {
             return 2;
+        }
 
-        long queryCount = blacklist.stream()
+        long queryCount = blacklist.getEntries().stream()
             .filter(entry -> Objects.equals(entry.getQuery(), query) && entry.getExecutionTime() > threshold1)
             .count();
 
         if (queryCount >= 5) {
             return 1;
-        }
-        else
+        } else {
             return 0;
+        }
     }
 
     public void resetStorage() {
@@ -102,37 +134,16 @@ public class BlacklistData {
 
     private void removeExpiredEntries() {
         LocalDateTime now = LocalDateTime.now();
-        blacklist.removeIf(entry -> Duration.between(entry.getTimestamp(), now).toHours() >= 12);
+        blacklist.getEntries().removeIf(entry -> Duration.between(entry.getTimestamp(), now).toHours() >= 12);
     }
 
-    @SuppressWarnings("checkstyle:MissingJavadocType")
-    public static class BlacklistEntry {
-        private final String query;
-        private final String identifier;
-        private final long executionTime;
-        private final LocalDateTime timestamp;
+    public String convertBlacklistToString() {
+        return blacklist.toString();
+    }
 
-        public BlacklistEntry(String query, String identifier, long executionTime, LocalDateTime timestamp) {
-            this.query = query;
-            this.identifier = identifier;
-            this.executionTime = executionTime;
-            this.timestamp = timestamp;
-        }
-
-        public String getQuery() {
-            return query;
-        }
-
-        public String getIdentifier() {
-            return identifier;
-        }
-
-        public long getExecutionTime() {
-            return executionTime;
-        }
-
-        public LocalDateTime getTimestamp() {
-            return timestamp;
-        }
+    public String mergeAndConvertBlacklist(String newEntriesStr) {
+        Blacklist newEntries = Blacklist.fromString(newEntriesStr);
+        setBlacklist(getBlacklist(newEntries)); // Merge new entries with existing ones
+        return convertBlacklistToString();
     }
 }
