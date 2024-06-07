@@ -336,6 +336,7 @@ public final class ClusterSettings extends AbstractScopedSettings {
                 MasterService.MASTER_SERVICE_STARVATION_LOGGING_THRESHOLD_SETTING,
                 SearchService.DEFAULT_SEARCH_TIMEOUT_SETTING,
                 SearchService.DEFAULT_ALLOW_PARTIAL_SEARCH_RESULTS,
+                SearchService.DEFAULT_ALLOW_MODIFIED_PARTIAL_SEARCH_RESULTS,
                 ElectMasterService.DISCOVERY_ZEN_MINIMUM_MASTER_NODES_SETTING,
                 TransportSearchAction.SHARD_COUNT_LIMIT_SETTING,
                 TransportSearchAction.DEFAULT_PRE_FILTER_SHARD_SIZE,

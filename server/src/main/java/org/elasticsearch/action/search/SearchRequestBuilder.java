@@ -539,6 +539,11 @@ public class SearchRequestBuilder extends ActionRequestBuilder<SearchRequest, Se
         return this;
     }
 
+    public SearchRequestBuilder setAllowModifiedSearchResults(boolean allowModifiedPartialSearchResults) {
+        request.allowModifiedPartialSearchResults(allowModifiedPartialSearchResults);
+        return this;
+    }
+
     /**
      * Should the query be profiled. Defaults to <code>false</code>
      */

@@ -81,6 +81,8 @@ public class SearchRequest extends ActionRequest implements IndicesRequest.Repla
 
     private Boolean allowPartialSearchResults;
 
+    private Boolean allowModifiedPartialSearchResults;
+
     private Scroll scroll;
 
     private int batchedReduceSize = DEFAULT_BATCHED_REDUCE_SIZE;
@@ -199,6 +201,7 @@ public class SearchRequest extends ActionRequest implements IndicesRequest.Repla
         boolean finalReduce
     ) {
         this.allowPartialSearchResults = searchRequest.allowPartialSearchResults;
+        this.allowModifiedPartialSearchResults = searchRequest.allowModifiedPartialSearchResults;
         this.batchedReduceSize = searchRequest.batchedReduceSize;
         this.ccsMinimizeRoundtrips = searchRequest.ccsMinimizeRoundtrips;
         this.indices = indices;
@@ -247,6 +250,9 @@ public class SearchRequest extends ActionRequest implements IndicesRequest.Repla
         }
         if (in.getVersion().onOrAfter(Version.V_6_3_0)) {
             allowPartialSearchResults = in.readOptionalBoolean();
+        }
+        if (in.getVersion().onOrAfter(Version.V_6_3_0)) {
+            allowModifiedPartialSearchResults = in.readOptionalBoolean();
         }
         if (in.getVersion().onOrAfter(Version.V_6_7_0)) {
             localClusterAlias = in.readOptionalString();
@@ -299,6 +305,9 @@ public class SearchRequest extends ActionRequest implements IndicesRequest.Repla
         }
         if (out.getVersion().onOrAfter(Version.V_6_3_0)) {
             out.writeOptionalBoolean(allowPartialSearchResults);
+        }
+        if (out.getVersion().onOrAfter(Version.V_6_3_0)) {
+            out.writeOptionalBoolean(allowModifiedPartialSearchResults);
         }
         if (out.getVersion().onOrAfter(Version.V_6_7_0)) {
             out.writeOptionalString(localClusterAlias);
@@ -688,8 +697,17 @@ public class SearchRequest extends ActionRequest implements IndicesRequest.Repla
         return this;
     }
 
+    public SearchRequest allowModifiedPartialSearchResults(boolean allowModifiedPartialSearchResults) {
+        this.allowModifiedPartialSearchResults = allowModifiedPartialSearchResults;
+        return this;
+    }
+
     public Boolean allowPartialSearchResults() {
         return this.allowPartialSearchResults;
+    }
+
+    public Boolean allowModifiedPartialSearchResults() {
+        return this.allowModifiedPartialSearchResults;
     }
 
     /**
@@ -882,6 +900,7 @@ public class SearchRequest extends ActionRequest implements IndicesRequest.Repla
             && Objects.equals(preFilterShardSize, that.preFilterShardSize)
             && Objects.equals(indicesOptions, that.indicesOptions)
             && Objects.equals(allowPartialSearchResults, that.allowPartialSearchResults)
+            && Objects.equals(allowModifiedPartialSearchResults, that.allowModifiedPartialSearchResults)
             && Objects.equals(localClusterAlias, that.localClusterAlias)
             && absoluteStartMillis == that.absoluteStartMillis
             && ccsMinimizeRoundtrips == that.ccsMinimizeRoundtrips
@@ -905,6 +924,7 @@ public class SearchRequest extends ActionRequest implements IndicesRequest.Repla
             maxConcurrentShardRequests,
             preFilterShardSize,
             allowPartialSearchResults,
+            allowModifiedPartialSearchResults,
             localClusterAlias,
             absoluteStartMillis,
             ccsMinimizeRoundtrips,
@@ -942,6 +962,8 @@ public class SearchRequest extends ActionRequest implements IndicesRequest.Repla
             + preFilterShardSize
             + ", allowPartialSearchResults="
             + allowPartialSearchResults
+            + ", allowModifiedPartialSearchResults="
+            + allowModifiedPartialSearchResults
             + ", localClusterAlias="
             + localClusterAlias
             + ", getOrCreateAbsoluteStartMillis="

@@ -257,7 +257,7 @@ public class QueryPhase {
             queryResult.terminatedEarly(true);
         } catch (TimeExceededException e) {
             assert timeoutSet : "TimeExceededException thrown even though timeout wasn't set";
-            if (searchContext.request().allowPartialSearchResults() == false) {
+            if (searchContext.request().allowPartialSearchResults() == false && searchContext.request().allowModifiedPartialSearchResults()==false) {
                 // Can't rethrow TimeExceededException because not serializable
                 throw new QueryPhaseExecutionException(searchContext.shardTarget(), "Time exceeded");
             }

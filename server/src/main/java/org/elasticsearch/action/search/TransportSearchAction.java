@@ -932,6 +932,11 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
             searchRequest.allowPartialSearchResults(searchService.defaultAllowPartialSearchResults());
         }
 
+        if(searchRequest.allowModifiedPartialSearchResults() == null)
+        {
+            searchRequest.allowModifiedPartialSearchResults(searchService.defaultAllowModifiedPartialSearchResults());
+        }
+
         // TODO: I think startTime() should become part of ActionRequest and that should be used both for index name
         // date math expressions and $now in scripts. This way all apis will deal with now in the same way instead
         // of just for the _search api
@@ -949,7 +954,9 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
                 searchRequest.getLocalClusterAlias(),
                 searchContext,
                 searchRequest.pointInTimeBuilder().getKeepAlive(),
-                searchRequest.allowPartialSearchResults()
+                searchRequest.allowPartialSearchResults(),
+                searchRequest.allowModifiedPartialSearchResults()
+
             );
         } else {
             final Index[] indices = resolveLocalIndices(localIndices, clusterState, timeProvider);
@@ -990,7 +997,19 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         final GroupShardsIterator<SearchShardIterator> shardIterators = mergeShardsIterators(localShardIterators, remoteShardIterators);
 
         failIfOverShardCountLimit(clusterService, shardIterators.size());
+        //here
+        long currentTimeMillis = System.currentTimeMillis();
 
+        // Convert minutes to milliseconds (1 minute = 60 seconds * 1000 milliseconds/second)
+        long threeMinutesInMilliseconds = 3 * 60 * 1000;
+
+        // Subtract three minutes from current time to get time 3 minutes before
+        long timeBefore = currentTimeMillis - threeMinutesInMilliseconds;
+        if(clusterState.metadata().index(searchRequest.indices()[0])!=null) {
+            if (clusterState.metadata().index(searchRequest.indices()[0]).getCreationDate() > timeBefore) {
+                searchRequest.allowModifiedPartialSearchResults(false);
+            }
+        }
         if (searchRequest.getWaitForCheckpoints().isEmpty() == false) {
             if (remoteShardIterators.isEmpty() == false) {
                 throw new IllegalArgumentException("Cannot use wait_for_checkpoints parameter with cross-cluster searches.");
@@ -1428,7 +1447,9 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         String localClusterAlias,
         SearchContextId searchContext,
         TimeValue keepAlive,
-        boolean allowPartialSearchResults
+        boolean allowPartialSearchResults,
+        boolean allowModifiedPartialSearchResults
+    
     ) {
         final List<SearchShardIterator> iterators = new ArrayList<>(searchContext.shards().size());
         for (Map.Entry<ShardId, SearchContextIdForNode> entry : searchContext.shards().entrySet()) {
