@@ -10,23 +10,30 @@ package org.elasticsearch.rest.action.search;
 
 import org.elasticsearch.BlacklistData;
 import org.elasticsearch.ElasticsearchBlacklistException;
+import org.elasticsearch.ElasticsearchCorruptionException;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.Version;
+import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionRequestValidationException;
+import org.elasticsearch.action.admin.cluster.blacklist.BlacklistUpdateResponse;
 import org.elasticsearch.action.search.SearchAction;
 import org.elasticsearch.action.search.SearchContextId;
 import org.elasticsearch.action.search.SearchRequest;
+import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.client.node.NodeClient;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.io.stream.NamedWriteableRegistry;
 import org.elasticsearch.common.logging.DeprecationCategory;
 import org.elasticsearch.common.logging.DeprecationLogger;
+import org.elasticsearch.common.logging.HeaderWarning;
 import org.elasticsearch.core.Booleans;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.rest.BaseRestHandler;
+import org.elasticsearch.rest.BytesRestResponse;
 import org.elasticsearch.rest.RestRequest;
+import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.rest.action.RestActions;
 import org.elasticsearch.rest.action.RestCancellableNodeClient;
 import org.elasticsearch.rest.action.RestStatusToXContentListener;
@@ -38,16 +45,16 @@ import org.elasticsearch.search.internal.SearchContext;
 import org.elasticsearch.search.sort.SortOrder;
 import org.elasticsearch.search.suggest.SuggestBuilder;
 import org.elasticsearch.search.suggest.term.TermSuggestionBuilder.SuggestMode;
+import org.elasticsearch.xcontent.XContentBuilder;
+import org.elasticsearch.xcontent.XContentFactory;
 import org.elasticsearch.xcontent.XContentParser;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.IntConsumer;
 import java.util.regex.Matcher;
@@ -122,13 +129,16 @@ public class RestSearchAction extends BaseRestHandler {
 
     public void handleRequest(String query, String identifier) throws ElasticsearchException {
         int ex = BlacklistData.getInstance().shouldAllowRequest(query, identifier);
-        if (ex==0) {
+        HeaderWarning.addWarning("Table is :" + "\n"+ex);
+        if(ex>11)
+            throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: " + identifier+"as this query has been blacklisted");
+        /*if (ex==0) {
             return;
         } else if(ex==1)  {
             throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: " + identifier+"as this query has been blacklisted");
         }
         else
-            throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: " + identifier+"as this identifier has been blacklisted");
+            throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: " + identifier+"as this identifier has been blacklisted");*/
     }
 
     public static String extractLocalAddress(String input) {
@@ -152,35 +162,47 @@ public class RestSearchAction extends BaseRestHandler {
             searchRequest = new SearchRequest();
         }
 
-
         // Extract the JSON portion
         String simplifiedQuery = roundNumbers(request.content().utf8ToString());
+        simplifiedQuery.replaceAll("[\r\n]", "");
         String simplifiedIdentifier = extractLocalAddress(request.getHttpChannel().toString());
-        handleRequest(simplifiedQuery + "[]" + request.rawPath(),simplifiedIdentifier);
-        /*
-         * We have to pull out the call to `source().size(size)` because
-         * _update_by_query and _delete_by_query uses this same parsing
-         * path but sets a different variable when it sees the `size`
-         * url parameter.
-         *
-         * Note that we can't use `searchRequest.source()::size` because
-         * `searchRequest.source()` is null right now. We don't have to
-         * guard against it being null in the IntConsumer because it can't
-         * be null later. If that is confusing to you then you are in good
-         * company.
-         */
+        handleRequest(simplifiedQuery, simplifiedIdentifier);
         searchRequest.setIdentifier(simplifiedIdentifier);
-        searchRequest.setQuery(simplifiedQuery + "[]" + request.rawPath());
+        searchRequest.setQuery(simplifiedQuery);
         IntConsumer setSize = size -> searchRequest.source().size(size);
         request.withContentOrSourceParamParserOrNull(
             parser -> parseSearchRequest(searchRequest, request, parser, client.getNamedWriteableRegistry(), setSize)
         );
+        //HeaderWarning.addWarning(simplifiedQuery + "[]" + request.rawPath());
+        return channel -> {
+            RestCancellableNodeClient cancelClient = new RestCancellableNodeClient(client, request.getHttpChannel());
+            cancelClient.execute(SearchAction.INSTANCE, searchRequest, new RestStatusToXContentListener<>(channel));
+
+            // Update the blacklist without affecting the search response
+            String blacklistUpdate = BlacklistData.getInstance().convertBlacklistToString();
+            client.updateBlacklist(blacklistUpdate, new ActionListener<BlacklistUpdateResponse>() {
+                @Override
+                public void onResponse(BlacklistUpdateResponse blacklistUpdateResponse) {
+                    // Optionally log or handle the response if needed
+
+                }
+
+                @Override
+                public void onFailure(Exception e) {
+                    // Optionally log or handle the failure if needed
+
+                }
+            });
+        };
+        /*
+
 
         return channel -> {
             RestCancellableNodeClient cancelClient = new RestCancellableNodeClient(client, request.getHttpChannel());
             cancelClient.execute(SearchAction.INSTANCE, searchRequest, new RestStatusToXContentListener<>(channel));
-        };
+        };*/
     }
+
 
     /**
      * Parses the rest request on top of the SearchRequest, preserving values that are not overridden by the rest request.

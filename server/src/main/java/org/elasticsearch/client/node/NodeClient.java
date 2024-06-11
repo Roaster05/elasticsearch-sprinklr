@@ -12,6 +12,9 @@ import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.ActionResponse;
 import org.elasticsearch.action.ActionType;
+import org.elasticsearch.action.admin.cluster.blacklist.BlacklistUpdateAction;
+import org.elasticsearch.action.admin.cluster.blacklist.BlacklistUpdateRequest;
+import org.elasticsearch.action.admin.cluster.blacklist.BlacklistUpdateResponse;
 import org.elasticsearch.action.support.TransportAction;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.support.AbstractClient;
@@ -137,6 +140,11 @@ public class NodeClient extends AbstractClient {
     @Override
     public Client getRemoteClusterClient(String clusterAlias) {
         return remoteClusterService.getRemoteClusterClient(threadPool(), clusterAlias, true);
+    }
+
+    public void updateBlacklist(String item, ActionListener<BlacklistUpdateResponse> listener) {
+        BlacklistUpdateRequest request = new BlacklistUpdateRequest(item);
+        execute(BlacklistUpdateAction.INSTANCE, request, listener);
     }
 
     public NamedWriteableRegistry getNamedWriteableRegistry() {

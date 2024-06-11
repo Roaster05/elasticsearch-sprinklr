@@ -36,7 +36,7 @@ public class BlacklistEntry {
 
     @Override
     public String toString() {
-        return query + "," + identifier + "," + executionTime + "," + timestamp.format(formatter);
+        return query + "@" + identifier + "@" + executionTime + "@" + timestamp.format(formatter);
     }
 
     public static BlacklistEntry fromString(String str) {
@@ -49,7 +49,7 @@ public class BlacklistEntry {
             return new BlacklistEntry(defaultQuery, defaultIdentifier, defaultExecutionTime, defaultTimestamp);
         }
 
-        String[] parts = str.split(",");
+        String[] parts = str.split("@");
         if (parts.length != 4) {
             return new BlacklistEntry(defaultQuery, defaultIdentifier, defaultExecutionTime, defaultTimestamp);
         }

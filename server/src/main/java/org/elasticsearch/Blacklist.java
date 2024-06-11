@@ -23,14 +23,14 @@ public class Blacklist {
     public String toString() {
         return entries.stream()
             .map(BlacklistEntry::toString)
-            .collect(Collectors.joining(";"));
+            .collect(Collectors.joining("#"));
     }
 
     @SuppressWarnings("checkstyle:DescendantToken")
     public static Blacklist fromString(String str) {
         Blacklist blacklist = new Blacklist();
         if (str != null && !str.isEmpty()) {
-            String[] entryStrings = str.split(";");
+            String[] entryStrings = str.split("#");
             for (String entryString : entryStrings) {
                 if (!entryString.isEmpty()) {
                     blacklist.addEntry(BlacklistEntry.fromString(entryString));
@@ -39,8 +39,10 @@ public class Blacklist {
         }
         return blacklist;
     }
-
     public void clear() {
         entries.clear();
+    }
+    public int size() {
+        return entries.size();
     }
 }

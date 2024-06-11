@@ -46,6 +46,7 @@ import org.elasticsearch.xcontent.ToXContentFragment;
 import org.elasticsearch.xcontent.XContentBuilder;
 
 import java.io.IOException;
+import java.time.LocalTime;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -799,7 +800,10 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
     public void writeTo(StreamOutput out) throws IOException {
         clusterName.writeTo(out);
         out.writeLong(version);
-        out.writeString(clusterblacklist);
+        if(clusterblacklist==null)
+            out.writeString("");
+        else
+            out.writeString(clusterblacklist);
         out.writeString(stateUUID);
         metadata.writeTo(out);
         routingTable.writeTo(out);
@@ -886,7 +890,10 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             out.writeString(toUuid);
             out.writeLong(toVersion);
             if (out.getVersion().onOrAfter(Version.V_6_7_0)) {
-                out.writeString(clusterblacklist);
+                if(clusterblacklist==null)
+                    out.writeString("");
+                else
+                    out.writeString(clusterblacklist);
             }
             routingTable.writeTo(out);
             nodes.writeTo(out);
