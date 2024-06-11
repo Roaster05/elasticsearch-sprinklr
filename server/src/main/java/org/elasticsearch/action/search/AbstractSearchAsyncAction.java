@@ -708,7 +708,6 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
         );
     }
 
-    // whatt
     boolean buildPointInTimeFromSearchResults() {
         return false;
     }

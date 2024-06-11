@@ -1,3 +1,5 @@
+
+
 package org.elasticsearch.action.admin.cluster.blacklist;
 
 import org.elasticsearch.BlacklistData;
@@ -38,29 +40,34 @@ public class TransportBlacklistUpdateAction extends TransportMasterNodeAction<Bl
 
     @Override
     protected ClusterBlockException checkBlock(BlacklistUpdateRequest request, ClusterState state) {
-        return null; // Implement your logic to check cluster block exceptions
+        // to check whether to bypass the BlacklistUpdateAction based on some criteria but set to null for now
+        return null;
     }
 
+    /**
+     *
+     * @param request
+     * @param state
+     * @param listener
+     * Here the new Cluster state is being build which will be executed for publishing to all the other nodes of the cluster
+     * The new clusterState is formed to just modify the clusterBlacklist parameter only
+     */
     @Override
     protected void masterOperation(
         BlacklistUpdateRequest request,
         ClusterState state,
         ActionListener<BlacklistUpdateResponse> listener) {
-        // Create a new cluster state builder
+
         ClusterState.Builder newStateBuilder = ClusterState.builder(state);
 
-        // Merge and convert the new blacklist data
         BlacklistData.getInstance().mergeAndConvertBlacklist(request.getBlacklistItem());
 
-        // Set the updated blacklist in the new state
         newStateBuilder.clusterblacklist(BlacklistData.getInstance().convertBlacklistToString());
 
-        // Build the new cluster state
         ClusterState newClusterState = newStateBuilder.build();
 
-        // Submit a cluster state update task with the new state
         clusterService.submitStateUpdateTask(
-            "create-inde",
+            "blacklist-update",
             new AckedClusterStateUpdateTask(Priority.URGENT, request, listener.map(response -> new BlacklistUpdateResponse()) ){
 
                 @Override

@@ -1,10 +1,8 @@
 package org.elasticsearch.action.admin.cluster.blacklist;
 
 import org.elasticsearch.action.ActionResponse;
-import org.elasticsearch.action.support.master.AcknowledgedResponse;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.logging.HeaderWarning;
 import org.elasticsearch.common.xcontent.StatusToXContentObject;
 import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.xcontent.ToXContent;
@@ -18,17 +16,11 @@ public class BlacklistUpdateResponse extends ActionResponse implements StatusToX
 
     public BlacklistUpdateResponse(StreamInput in) throws IOException {
         super(in);
-        HeaderWarning.addWarning("update response");
         acknowledged = in.readBoolean();
-    }
-
-    public BlacklistUpdateResponse(boolean acknowledged) {
-        this.acknowledged = acknowledged;
     }
 
     public BlacklistUpdateResponse() {
         super();
-        // Initialize any fields if necessary
     }
 
     public boolean isAcknowledged() {

@@ -10,7 +10,6 @@ package org.elasticsearch.rest.action.search;
 
 import org.elasticsearch.BlacklistData;
 import org.elasticsearch.ElasticsearchBlacklistException;
-import org.elasticsearch.ElasticsearchCorruptionException;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.Version;
@@ -20,20 +19,16 @@ import org.elasticsearch.action.admin.cluster.blacklist.BlacklistUpdateResponse;
 import org.elasticsearch.action.search.SearchAction;
 import org.elasticsearch.action.search.SearchContextId;
 import org.elasticsearch.action.search.SearchRequest;
-import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.client.node.NodeClient;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.io.stream.NamedWriteableRegistry;
 import org.elasticsearch.common.logging.DeprecationCategory;
 import org.elasticsearch.common.logging.DeprecationLogger;
-import org.elasticsearch.common.logging.HeaderWarning;
 import org.elasticsearch.core.Booleans;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.rest.BaseRestHandler;
-import org.elasticsearch.rest.BytesRestResponse;
 import org.elasticsearch.rest.RestRequest;
-import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.rest.action.RestActions;
 import org.elasticsearch.rest.action.RestCancellableNodeClient;
 import org.elasticsearch.rest.action.RestStatusToXContentListener;
@@ -45,8 +40,6 @@ import org.elasticsearch.search.internal.SearchContext;
 import org.elasticsearch.search.sort.SortOrder;
 import org.elasticsearch.search.suggest.SuggestBuilder;
 import org.elasticsearch.search.suggest.term.TermSuggestionBuilder.SuggestMode;
-import org.elasticsearch.xcontent.XContentBuilder;
-import org.elasticsearch.xcontent.XContentFactory;
 import org.elasticsearch.xcontent.XContentParser;
 
 import java.io.IOException;
@@ -55,6 +48,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.IntConsumer;
 import java.util.regex.Matcher;
@@ -106,6 +100,15 @@ public class RestSearchAction extends BaseRestHandler {
         );
     }
 
+    /**
+     *
+     * @param queryContent
+     * Basically rather than searching for same query tried to reduce any numbers to their logarithmic base
+     * as this will kind of broaden our similar query classifier and will incorporate
+     * queries of somewhat similar time complexities.
+     * @return
+     */
+
     public static String roundNumbers(String queryContent) {
         Pattern numberPattern = Pattern.compile("\\d+");
         Matcher matcher = numberPattern.matcher(queryContent);
@@ -126,31 +129,26 @@ public class RestSearchAction extends BaseRestHandler {
         return (int) Math.log10(number);
     }
 
-
+    /**
+     *
+     * @param query
+     * @param identifier
+     * @throws ElasticsearchException
+     *
+     * This function basically handles the request by accessing the cache which contains bad queries and bypasses the query if it
+     * looks like a potential bad request , also the reason for bypassing the request is also mentioned whether the reason is query based
+     * or identifier based on the response received.
+     */
     public void handleRequest(String query, String identifier) throws ElasticsearchException {
         int ex = BlacklistData.getInstance().shouldAllowRequest(query, identifier);
-        HeaderWarning.addWarning("Table is :" + "\n"+ex);
-        if(ex>11)
-            throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: " + identifier+"as this query has been blacklisted");
-        /*if (ex==0) {
+
+        if (ex==0) {
             return;
         } else if(ex==1)  {
             throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: " + identifier+"as this query has been blacklisted");
         }
         else
-            throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: " + identifier+"as this identifier has been blacklisted");*/
-    }
-
-    public static String extractLocalAddress(String input) {
-        String pattern = "localAddress=([^,]+)";
-        Pattern r = Pattern.compile(pattern);
-        Matcher m = r.matcher(input);
-
-        if (m.find()) {
-            return m.group(1); // Return the captured group (the localAddress value)
-        } else {
-            return null; // Return null if no match is found
-        }
+            throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: " + identifier+"as this identifier has been blacklisted");
     }
 
     @Override
@@ -161,11 +159,9 @@ public class RestSearchAction extends BaseRestHandler {
         } else {
             searchRequest = new SearchRequest();
         }
-
-        // Extract the JSON portion
-        String simplifiedQuery = roundNumbers(request.content().utf8ToString());
-        simplifiedQuery.replaceAll("[\r\n]", "");
-        String simplifiedIdentifier = extractLocalAddress(request.getHttpChannel().toString());
+        String simplifiedQuery = roundNumbers(request.content().utf8ToString())+ Arrays.toString(searchRequest.indices());
+        // Currently set the identifer randomly later we will be obtaining it from the request headers.
+        String simplifiedIdentifier = UUID.randomUUID().toString();
         handleRequest(simplifiedQuery, simplifiedIdentifier);
         searchRequest.setIdentifier(simplifiedIdentifier);
         searchRequest.setQuery(simplifiedQuery);
@@ -173,34 +169,29 @@ public class RestSearchAction extends BaseRestHandler {
         request.withContentOrSourceParamParserOrNull(
             parser -> parseSearchRequest(searchRequest, request, parser, client.getNamedWriteableRegistry(), setSize)
         );
-        //HeaderWarning.addWarning(simplifiedQuery + "[]" + request.rawPath());
         return channel -> {
             RestCancellableNodeClient cancelClient = new RestCancellableNodeClient(client, request.getHttpChannel());
             cancelClient.execute(SearchAction.INSTANCE, searchRequest, new RestStatusToXContentListener<>(channel));
 
-            // Update the blacklist without affecting the search response
+            // Updating the blacklist without affecting the search response
             String blacklistUpdate = BlacklistData.getInstance().convertBlacklistToString();
             client.updateBlacklist(blacklistUpdate, new ActionListener<BlacklistUpdateResponse>() {
                 @Override
-                public void onResponse(BlacklistUpdateResponse blacklistUpdateResponse) {
-                    // Optionally log or handle the response if needed
 
+                public void onResponse(BlacklistUpdateResponse blacklistUpdateResponse) {
+                    // to handle if we receive acknowledged for cluster state update
+                    return;
                 }
 
                 @Override
                 public void onFailure(Exception e) {
-                    // Optionally log or handle the failure if needed
+                    // We can handle failure of cluster state update as well but currently not altering the response of search
+                    //even if received a failure
+                    return;
 
                 }
             });
         };
-        /*
-
-
-        return channel -> {
-            RestCancellableNodeClient cancelClient = new RestCancellableNodeClient(client, request.getHttpChannel());
-            cancelClient.execute(SearchAction.INSTANCE, searchRequest, new RestStatusToXContentListener<>(channel));
-        };*/
     }
 
 

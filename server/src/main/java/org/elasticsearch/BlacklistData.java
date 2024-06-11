@@ -1,20 +1,14 @@
 package org.elasticsearch;
 
-import java.time.Duration;
+
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+
 
 @SuppressWarnings("checkstyle:MissingJavadocType")
 public class BlacklistData {
     private static BlacklistData instance;
     private Blacklist blacklist;
-    private final ScheduledExecutorService scheduler;
     public long threshold1 = 3000;
     public long threshold2 = 1000;
     public boolean allowed = false;
@@ -32,8 +26,6 @@ public class BlacklistData {
 
     private BlacklistData() {
         blacklist = new Blacklist();
-        scheduler = Executors.newScheduledThreadPool(1);
-        startDecayTask();
     }
 
     public static synchronized BlacklistData getInstance() {
@@ -99,19 +91,28 @@ public class BlacklistData {
     }
 
     @SuppressWarnings("checkstyle:DescendantToken")
+    /*
+    The queries here are added to the blacklist, had to remove kibana and migration based queries
+    as they might get added while setting up these.
+     */
     public void addToBlacklist(String query, String identifier, long tookInMillis) {
-        if (query != null && !query.contains("kibana") && !query.contains("migration") && query.length()>30) {
+
+        if (query != null && !query.contains("kibana") && !query.contains("migration")) {
             blacklist.addEntry(new BlacklistEntry(query, identifier, tookInMillis, LocalDateTime.now()));
         }
     }
 
     @SuppressWarnings({"checkstyle:MissingJavadocMethod", "checkstyle:DescendantToken"})
+    /*
+    These method on the basis of the query and identifier received from the request identifies
+    the potential threat of a search request based on the previously identified bad scoring,
+    Implemented checks on both threats of the query and the identifier
+    Here the return value is accessed to determine the reason of blacklisting to be displayed.
+     */
     public int shouldAllowRequest(String query, String identifier) {
-        /*if (!allowed) {
+        if (!allowed) {
             return 0;
         }
-
-
         double identifierScore = 0.0;
 
         for (BlacklistEntry entry : blacklist.getEntries()) {
@@ -123,58 +124,22 @@ public class BlacklistData {
                 }
             }
         }
-
-        if (identifierScore >= 20) {
+        if (identifierScore >= 50) {
             return 2;
-        }*/
-        /*List<BlacklistEntry> entries = blacklist.getEntries();
-        if (entries == null || entries.isEmpty()) {
-            return "No entries in the blacklist.";
         }
-
-        Map<String, Integer> queryCounts = new HashMap<>();
-        for (BlacklistEntry entry : entries) {
-            String query = entry.getQuery();
-            queryCounts.put(query, queryCounts.getOrDefault(query, 0) + 1);
-        }
-
-        StringBuilder table = new StringBuilder();
-        table.append("+------------------------------+-------+\n");
-        table.append("|           Query              | Count |\n");
-        table.append("+------------------------------+-------+\n");
-
-        for (Map.Entry<String, Integer> entry : queryCounts.entrySet()) {
-            table.append(String.format("| %-28s | %-5d |\n", entry.getKey(), entry.getValue()));
-        }
-
-        table.append("+------------------------------+-------+\n");
-
-        return table.toString();*/
-
         long queryCount = blacklist.getEntries().stream()
             .filter(entry -> Objects.equals(entry.getQuery(), query) && entry.getExecutionTime() > threshold1)
             .count();
 
-        /*if (queryCount >= 5) {
+        if (queryCount >= 15) {
             return 1;
         } else {
             return 0;
-        }*/
-        //return blacklist.size();
-        return (int)queryCount;
+        }
     }
 
     public void resetStorage() {
         blacklist.clear();
-    }
-
-    private void startDecayTask() {
-        scheduler.scheduleAtFixedRate(this::removeExpiredEntries, 0, 1, TimeUnit.HOURS);
-    }
-
-    private void removeExpiredEntries() {
-        LocalDateTime now = LocalDateTime.now();
-        blacklist.getEntries().removeIf(entry -> Duration.between(entry.getTimestamp(), now).toHours() >= 12);
     }
 
     public String convertBlacklistToString() {

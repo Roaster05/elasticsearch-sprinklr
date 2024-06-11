@@ -172,7 +172,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
                 "The request was identified as a Bad request, further such requests might get blacklisted"
             );
         }
-        BlacklistData.getInstance().addToBlacklist(query, identifier, tookInMillis);
+        
 
 
 

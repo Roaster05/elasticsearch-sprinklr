@@ -782,6 +782,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         Builder builder = new Builder(clusterName);
         builder.version = in.readLong();
         builder.clusterblacklist = in.readString();
+        BlacklistData.getInstance().mergeAndConvertBlacklist(builder.clusterblacklist);
         builder.uuid = in.readString();
         builder.metadata = Metadata.readFrom(in);
         builder.routingTable = RoutingTable.readFrom(in);
@@ -856,6 +857,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             toUuid = after.stateUUID;
             toVersion = after.version;
             clusterblacklist = after.clusterblacklist;
+            BlacklistData.getInstance().mergeAndConvertBlacklist(clusterblacklist);
             clusterName = after.clusterName;
             routingTable = after.routingTable.diff(before.routingTable);
             nodes = after.nodes.diff(before.nodes);
@@ -875,6 +877,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             } else {
                 clusterblacklist="";
             }
+            BlacklistData.getInstance().mergeAndConvertBlacklist(clusterblacklist);
             routingTable = RoutingTable.readDiffFrom(in);
             nodes = DiscoveryNodes.readDiffFrom(in, localNode);
             metadata = Metadata.readDiffFrom(in);
@@ -918,6 +921,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             builder.stateUUID(toUuid);
             builder.version(toVersion);
             builder.clusterblacklist(state.clusterblacklist);
+            BlacklistData.getInstance().mergeAndConvertBlacklist(state.clusterblacklist);
             builder.routingTable(routingTable.apply(state.routingTable));
             builder.nodes(nodes.apply(state.nodes));
             builder.metadata(metadata.apply(state.metadata));
