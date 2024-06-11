@@ -197,6 +197,13 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
         Property.NodeScope
     );
 
+    public static final Setting<Boolean> DEFAULT_ALLOW_MODIFIED_PARTIAL_SEARCH_RESULTS = Setting.boolSetting(
+        "search.default_allow_modified_partial_search_results",
+        true,
+        Property.Dynamic,
+        Property.NodeScope
+    );
+
     public static final Setting<Integer> MAX_OPEN_SCROLL_CONTEXT = Setting.intSetting(
         "search.max_open_scroll_context",
         500,
@@ -249,6 +256,8 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
     private volatile TimeValue defaultSearchTimeout;
 
     private volatile boolean defaultAllowPartialSearchResults;
+
+    private volatile boolean defaultAllowModifiedPartialSearchResults;
 
     private volatile boolean lowLevelCancellation;
 
@@ -306,8 +315,12 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
         clusterService.getClusterSettings().addSettingsUpdateConsumer(DEFAULT_SEARCH_TIMEOUT_SETTING, this::setDefaultSearchTimeout);
 
         defaultAllowPartialSearchResults = DEFAULT_ALLOW_PARTIAL_SEARCH_RESULTS.get(settings);
+        defaultAllowModifiedPartialSearchResults = DEFAULT_ALLOW_MODIFIED_PARTIAL_SEARCH_RESULTS.get(settings);
         clusterService.getClusterSettings()
             .addSettingsUpdateConsumer(DEFAULT_ALLOW_PARTIAL_SEARCH_RESULTS, this::setDefaultAllowPartialSearchResults);
+        clusterService.getClusterSettings()
+            .addSettingsUpdateConsumer(DEFAULT_ALLOW_MODIFIED_PARTIAL_SEARCH_RESULTS, this::setDefaultAllowModifiedPartialSearchResults);
+
 
         maxOpenScrollContext = MAX_OPEN_SCROLL_CONTEXT.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(MAX_OPEN_SCROLL_CONTEXT, this::setMaxOpenScrollContext);
@@ -352,8 +365,16 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
         this.defaultAllowPartialSearchResults = defaultAllowPartialSearchResults;
     }
 
+    private void setDefaultAllowModifiedPartialSearchResults(boolean defaultAllowModifiedPartialSearchResults) {
+        this.defaultAllowModifiedPartialSearchResults = defaultAllowModifiedPartialSearchResults;
+    }
+
     public boolean defaultAllowPartialSearchResults() {
         return defaultAllowPartialSearchResults;
+    }
+
+    public boolean defaultAllowModifiedPartialSearchResults() {
+        return defaultAllowModifiedPartialSearchResults;
     }
 
     private void setMaxOpenScrollContext(int maxOpenScrollContext) {

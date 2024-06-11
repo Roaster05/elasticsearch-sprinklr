@@ -89,6 +89,8 @@ import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -113,6 +115,16 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         Property.NodeScope
     );
 
+
+    public static final Setting<String> MODIFIED_PARTIAL_SEARCH_RESULT_LIMIT = Setting.simpleString(
+        "action.search.modified_partial_search_result_limit",
+        "",
+        Property.Dynamic,
+        Property.NodeScope
+    );
+
+
+
     public static final Setting<Integer> DEFAULT_PRE_FILTER_SHARD_SIZE = Setting.intSetting(
         "action.search.pre_filter_shard_size.default",
         SearchRequest.DEFAULT_PRE_FILTER_SHARD_SIZE,
@@ -131,6 +143,8 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
     private final CircuitBreaker circuitBreaker;
     private final ExecutorSelector executorSelector;
     private final int defaultPreFilterShardSize;
+    private String previousPartialString="";
+    private long previousPartialAge=Long.MAX_VALUE;
 
     @Inject
     public TransportSearchAction(
@@ -911,6 +925,49 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         return indices;
     }
 
+    public static long parseDurationToMillis(String duration) {
+        long millis = 0;
+
+        // Define the regex pattern for matching each time component
+        String regex = "(?:(\\d+)yr)?(?:(\\d+)mo)?(?:(\\d+)da)?(?:(\\d+)hr)?(?:(\\d+)mi)?(?:(\\d+)se)?";
+        Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(duration);
+
+        // Constants for converting each time unit to milliseconds
+        long MILLIS_IN_SECOND = 1000;
+        long MILLIS_IN_MINUTE = 60 * MILLIS_IN_SECOND;
+        long MILLIS_IN_HOUR = 60 * MILLIS_IN_MINUTE;
+        long MILLIS_IN_DAY = 24 * MILLIS_IN_HOUR;
+        long MILLIS_IN_MONTH = 30 * MILLIS_IN_DAY;
+        long MILLIS_IN_YEAR = 365 * MILLIS_IN_DAY;
+
+        // Iterate over the matches and sum up the total duration in milliseconds
+        if (matcher.matches()) {
+            if (matcher.group(1) != null) {
+                millis += Long.parseLong(matcher.group(1)) * MILLIS_IN_YEAR;
+            }
+            if (matcher.group(2) != null) {
+                millis += Long.parseLong(matcher.group(2)) * MILLIS_IN_MONTH;
+            }
+            if (matcher.group(3) != null) {
+                millis += Long.parseLong(matcher.group(3)) * MILLIS_IN_DAY;
+            }
+            if (matcher.group(4) != null) {
+                millis += Long.parseLong(matcher.group(4)) * MILLIS_IN_HOUR;
+            }
+            if (matcher.group(5) != null) {
+                millis += Long.parseLong(matcher.group(5)) * MILLIS_IN_MINUTE;
+            }
+            if (matcher.group(6) != null) {
+                millis += Long.parseLong(matcher.group(6)) * MILLIS_IN_SECOND;
+            }
+        }
+        if(millis==0)
+            return Long.MAX_VALUE;
+
+        return millis;
+    }
+
     private void executeSearch(
         SearchTask task,
         SearchTimeProvider timeProvider,
@@ -932,6 +989,11 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
             searchRequest.allowPartialSearchResults(searchService.defaultAllowPartialSearchResults());
         }
 
+        if(searchRequest.allowModifiedPartialSearchResults() == null)
+        {
+            searchRequest.allowModifiedPartialSearchResults(searchService.defaultAllowModifiedPartialSearchResults());
+        }
+
         // TODO: I think startTime() should become part of ActionRequest and that should be used both for index name
         // date math expressions and $now in scripts. This way all apis will deal with now in the same way instead
         // of just for the _search api
@@ -949,7 +1011,9 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
                 searchRequest.getLocalClusterAlias(),
                 searchContext,
                 searchRequest.pointInTimeBuilder().getKeepAlive(),
-                searchRequest.allowPartialSearchResults()
+                searchRequest.allowPartialSearchResults(),
+                searchRequest.allowModifiedPartialSearchResults()
+
             );
         } else {
             final Index[] indices = resolveLocalIndices(localIndices, clusterState, timeProvider);
@@ -990,7 +1054,24 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         final GroupShardsIterator<SearchShardIterator> shardIterators = mergeShardsIterators(localShardIterators, remoteShardIterators);
 
         failIfOverShardCountLimit(clusterService, shardIterators.size());
+        //here
+        long currentTimeMillis = System.currentTimeMillis();
 
+
+        String newSetting  = clusterService.getClusterSettings().get(MODIFIED_PARTIAL_SEARCH_RESULT_LIMIT);
+        if(newSetting.equals(previousPartialString)==false)
+        {
+            previousPartialString = newSetting;
+            previousPartialAge = parseDurationToMillis(previousPartialString);
+        }
+
+        long timeBefore = currentTimeMillis - previousPartialAge;
+        // Currently handling only one index
+        if(clusterState.metadata().index(searchRequest.indices()[0])!=null) {
+            if (clusterState.metadata().index(searchRequest.indices()[0]).getCreationDate() > timeBefore) {
+                searchRequest.allowModifiedPartialSearchResults(false);
+            }
+        }
         if (searchRequest.getWaitForCheckpoints().isEmpty() == false) {
             if (remoteShardIterators.isEmpty() == false) {
                 throw new IllegalArgumentException("Cannot use wait_for_checkpoints parameter with cross-cluster searches.");
@@ -1428,7 +1509,9 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         String localClusterAlias,
         SearchContextId searchContext,
         TimeValue keepAlive,
-        boolean allowPartialSearchResults
+        boolean allowPartialSearchResults,
+        boolean allowModifiedPartialSearchResults
+
     ) {
         final List<SearchShardIterator> iterators = new ArrayList<>(searchContext.shards().size());
         for (Map.Entry<ShardId, SearchContextIdForNode> entry : searchContext.shards().entrySet()) {

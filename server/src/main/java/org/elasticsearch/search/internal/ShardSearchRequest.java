@@ -78,6 +78,7 @@ public class ShardSearchRequest extends TransportRequest implements IndicesReque
     private Boolean requestCache;
     private final long nowInMillis;
     private final boolean allowPartialSearchResults;
+    private final boolean allowModifiedPartialSearchResults;
     private final OriginalIndices originalIndices;
 
     private boolean canReturnNullResponseIfMatchNoDocs;
@@ -142,6 +143,7 @@ public class ShardSearchRequest extends TransportRequest implements IndicesReque
             aliasFilter,
             indexBoost,
             searchRequest.allowPartialSearchResults(),
+            searchRequest.allowModifiedPartialSearchResults(),
             searchRequest.scroll(),
             nowInMillis,
             clusterAlias,
@@ -183,6 +185,7 @@ public class ShardSearchRequest extends TransportRequest implements IndicesReque
             aliasFilter,
             1.0f,
             true,
+            true,
             null,
             nowInMillis,
             null,
@@ -205,6 +208,7 @@ public class ShardSearchRequest extends TransportRequest implements IndicesReque
         AliasFilter aliasFilter,
         float indexBoost,
         boolean allowPartialSearchResults,
+        boolean allowModifiedPartialSearchResults,
         Scroll scroll,
         long nowInMillis,
         @Nullable String clusterAlias,
@@ -223,6 +227,7 @@ public class ShardSearchRequest extends TransportRequest implements IndicesReque
         this.aliasFilter = aliasFilter;
         this.indexBoost = indexBoost;
         this.allowPartialSearchResults = allowPartialSearchResults;
+        this.allowModifiedPartialSearchResults = allowModifiedPartialSearchResults;
         this.scroll = scroll;
         this.nowInMillis = nowInMillis;
         this.clusterAlias = clusterAlias;
@@ -255,6 +260,13 @@ public class ShardSearchRequest extends TransportRequest implements IndicesReque
             allowPartialSearchResults = in.readOptionalBoolean();
         } else {
             allowPartialSearchResults = false;
+        }
+        if (in.getVersion().onOrAfter(Version.V_7_0_0)) {
+            allowModifiedPartialSearchResults = in.readBoolean();
+        } else if (in.getVersion().onOrAfter(Version.V_6_3_0)) {
+            allowModifiedPartialSearchResults = in.readOptionalBoolean();
+        } else {
+            allowModifiedPartialSearchResults = false;
         }
         if (in.getVersion().before(Version.V_7_11_0)) {
             in.readStringArray();
@@ -304,6 +316,7 @@ public class ShardSearchRequest extends TransportRequest implements IndicesReque
         this.requestCache = clone.requestCache;
         this.clusterAlias = clone.clusterAlias;
         this.allowPartialSearchResults = clone.allowPartialSearchResults;
+        this.allowModifiedPartialSearchResults = clone.allowModifiedPartialSearchResults;
         this.canReturnNullResponseIfMatchNoDocs = clone.canReturnNullResponseIfMatchNoDocs;
         this.bottomSortValues = clone.bottomSortValues;
         this.originalIndices = clone.originalIndices;
@@ -344,6 +357,11 @@ public class ShardSearchRequest extends TransportRequest implements IndicesReque
             out.writeBoolean(allowPartialSearchResults);
         } else if (out.getVersion().onOrAfter(Version.V_6_3_0)) {
             out.writeOptionalBoolean(allowPartialSearchResults);
+        }
+        if (out.getVersion().onOrAfter(Version.V_7_0_0)) {
+            out.writeBoolean(allowModifiedPartialSearchResults);
+        } else if (out.getVersion().onOrAfter(Version.V_6_3_0)) {
+            out.writeOptionalBoolean(allowModifiedPartialSearchResults);
         }
         if (asKey == false && out.getVersion().before(Version.V_7_11_0)) {
             out.writeStringArray(Strings.EMPTY_ARRAY);
@@ -457,6 +475,10 @@ public class ShardSearchRequest extends TransportRequest implements IndicesReque
 
     public boolean allowPartialSearchResults() {
         return allowPartialSearchResults;
+    }
+
+    public boolean allowModifiedPartialSearchResults() {
+        return allowModifiedPartialSearchResults;
     }
 
     public Scroll scroll() {

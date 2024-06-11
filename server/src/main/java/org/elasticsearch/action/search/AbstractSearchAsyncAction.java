@@ -199,6 +199,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
         executePhase(this);
     }
 
+    @SuppressWarnings("checkstyle:LineLength")
     @Override
     public final void run() {
         for (final SearchShardIterator iterator : toSkipShardsIts) {
@@ -208,23 +209,27 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
         if (shardsIts.size() > 0) {
             assert request.allowPartialSearchResults() != null : "SearchRequest missing setting for allowPartialSearchResults";
             if (request.allowPartialSearchResults() == false) {
-                final StringBuilder missingShards = new StringBuilder();
-                // Fail-fast verification of all shards being available
-                for (int index = 0; index < shardsIts.size(); index++) {
-                    final SearchShardIterator shardRoutings = shardsIts.get(index);
-                    if (shardRoutings.size() == 0) {
-                        if (missingShards.length() > 0) {
-                            missingShards.append(", ");
+                assert request.allowModifiedPartialSearchResults() != null : "SearchRequest missing setting for allowModifiedPartialSearchResults";
+                if(request.allowModifiedPartialSearchResults()==false) {
+                    final StringBuilder missingShards = new StringBuilder();
+                    // Fail-fast verification of all shards being available
+                    for (int index = 0; index < shardsIts.size(); index++) {
+                        final SearchShardIterator shardRoutings = shardsIts.get(index);
+                        if (shardRoutings.size() == 0) {
+                            if (missingShards.length() > 0) {
+                                missingShards.append(", ");
+                            }
+                            missingShards.append(shardRoutings.shardId());
                         }
-                        missingShards.append(shardRoutings.shardId());
                     }
-                }
-                if (missingShards.length() > 0) {
-                    // Status red - shard is missing all copies and would produce partial results for an index search
-                    final String msg = "Search rejected due to missing shards ["
-                        + missingShards
-                        + "]. Consider using `allow_partial_search_results` setting to bypass this error.";
-                    throw new SearchPhaseExecutionException(getName(), msg, null, ShardSearchFailure.EMPTY_ARRAY);
+                    if (missingShards.length() > 0) {
+                        // Status red - shard is missing all copies and would produce partial results for an index search
+                        final String msg = "Search rejected due to missing shards ["
+                            + missingShards
+                            + "]. Consider using `allow_partial_search_results` setting to bypass this error.";
+                        throw new SearchPhaseExecutionException(getName(), msg, null, ShardSearchFailure.EMPTY_ARRAY);
+
+                    }
                 }
             }
             Version version = request.minCompatibleShardNode();
@@ -399,7 +404,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
             logger.debug(() -> new ParameterizedMessage("All shards failed for phase: [{}]", currentPhase.getName()), cause);
             onPhaseFailure(currentPhase, "all shards failed", cause);
         } else {
-            Boolean allowPartialResults = request.allowPartialSearchResults();
+            Boolean allowPartialResults = request.allowPartialSearchResults() || request.allowModifiedPartialSearchResults();
             assert allowPartialResults != null : "SearchRequest missing setting for allowPartialSearchResults";
             if (allowPartialResults == false && successfulOps.get() != getNumShards()) {
                 // check if there are actual failures in the atomic array since
@@ -481,7 +486,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
         final boolean lastShard = nextShard == null;
         logger.debug(() -> new ParameterizedMessage("{}: Failed to execute [{}] lastShard [{}]", shard, request, lastShard), e);
         if (lastShard) {
-            if (request.allowPartialSearchResults() == false) {
+            if (request.allowPartialSearchResults() == false && request.allowModifiedPartialSearchResults()==false ) {
                 if (requestCancelled.compareAndSet(false, true)) {
                     try {
                         searchTransportService.cancelSearchTask(task, "partial results are not allowed and at least one shard has failed");
@@ -687,7 +692,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
     @Override
     public void sendSearchResponse(InternalSearchResponse internalSearchResponse, AtomicArray<SearchPhaseResult> queryResults) {
         ShardSearchFailure[] failures = buildShardFailures();
-        Boolean allowPartialResults = request.allowPartialSearchResults();
+        Boolean allowPartialResults = request.allowPartialSearchResults() || request.allowModifiedPartialSearchResults();
         assert allowPartialResults != null : "SearchRequest missing setting for allowPartialSearchResults";
         if (allowPartialResults == false && failures.length > 0) {
             raisePhaseFailure(new SearchPhaseExecutionException("", "Shard failures", null, failures));

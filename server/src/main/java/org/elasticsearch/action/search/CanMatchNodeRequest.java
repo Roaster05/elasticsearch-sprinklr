@@ -44,6 +44,7 @@ public class CanMatchNodeRequest extends TransportRequest implements IndicesRequ
     private final String[] types;
     private final Boolean requestCache;
     private final boolean allowPartialSearchResults;
+    private final boolean allowModifiedPartialSearchResults;
     private final Scroll scroll;
     private final int numberOfShards;
     private final long nowInMillis;
@@ -139,6 +140,8 @@ public class CanMatchNodeRequest extends TransportRequest implements IndicesRequ
         // at this stage. Any NPEs in the above are therefore an error in request preparation logic.
         assert searchRequest.allowPartialSearchResults() != null;
         this.allowPartialSearchResults = searchRequest.allowPartialSearchResults();
+        assert searchRequest.allowModifiedPartialSearchResults()!=null;
+        this.allowModifiedPartialSearchResults = searchRequest.allowModifiedPartialSearchResults();
         this.scroll = searchRequest.scroll();
         this.numberOfShards = numberOfShards;
         this.nowInMillis = nowInMillis;
@@ -156,6 +159,7 @@ public class CanMatchNodeRequest extends TransportRequest implements IndicesRequ
         scroll = in.readOptionalWriteable(Scroll::new);
         requestCache = in.readOptionalBoolean();
         allowPartialSearchResults = in.readBoolean();
+        allowModifiedPartialSearchResults = in.readBoolean();
         numberOfShards = in.readVInt();
         nowInMillis = in.readVLong();
         clusterAlias = in.readOptionalString();
@@ -174,6 +178,7 @@ public class CanMatchNodeRequest extends TransportRequest implements IndicesRequ
         out.writeOptionalWriteable(scroll);
         out.writeOptionalBoolean(requestCache);
         out.writeBoolean(allowPartialSearchResults);
+        out.writeBoolean(allowModifiedPartialSearchResults);
         out.writeVInt(numberOfShards);
         out.writeVLong(nowInMillis);
         out.writeOptionalString(clusterAlias);
@@ -202,6 +207,7 @@ public class CanMatchNodeRequest extends TransportRequest implements IndicesRequ
             r.aliasFilter,
             r.indexBoost,
             allowPartialSearchResults,
+            allowModifiedPartialSearchResults,
             scroll,
             nowInMillis,
             clusterAlias,

@@ -164,6 +164,11 @@ public class SubmitAsyncSearchRequest implements Validatable {
         this.searchRequest.allowPartialSearchResults(allowPartialSearchResults);
     }
 
+    public void setAllowModifiedSearchResults(boolean allowModifiedPartialSearchResults)
+    {
+        this.searchRequest.allowModifiedPartialSearchResults(allowModifiedPartialSearchResults);
+    }
+
     /**
      * Gets if this request should allow partial results.
      */

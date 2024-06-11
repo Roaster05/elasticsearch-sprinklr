@@ -281,7 +281,9 @@ public class MultiSearchRequest extends ActionRequest implements CompositeIndice
                             searchRequest.routing(nodeStringValue(value, null));
                         } else if ("allow_partial_search_results".equals(entry.getKey())) {
                             searchRequest.allowPartialSearchResults(nodeBooleanValue(value, null));
-                        } else if ("expand_wildcards".equals(entry.getKey()) || "expandWildcards".equals(entry.getKey())) {
+                        } else if ("allow_modified_partial_search_results".equals(entry.getKey())) {
+                            searchRequest.allowModifiedPartialSearchResults(nodeBooleanValue(value, null));
+                        }else if ("expand_wildcards".equals(entry.getKey()) || "expandWildcards".equals(entry.getKey())) {
                             expandWildcards = value;
                         } else if ("ignore_unavailable".equals(entry.getKey()) || "ignoreUnavailable".equals(entry.getKey())) {
                             ignoreUnavailable = value;
@@ -387,6 +389,9 @@ public class MultiSearchRequest extends ActionRequest implements CompositeIndice
         }
         if (request.allowPartialSearchResults() != null) {
             xContentBuilder.field("allow_partial_search_results", request.allowPartialSearchResults());
+        }
+        if(request.allowModifiedPartialSearchResults()!=null) {
+            xContentBuilder.field("allow_modified_partial_search_results", request.allowModifiedPartialSearchResults());
         }
         xContentBuilder.endObject();
     }

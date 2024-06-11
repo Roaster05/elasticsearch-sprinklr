@@ -20,6 +20,7 @@ import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.io.stream.NamedWriteableRegistry;
 import org.elasticsearch.common.logging.DeprecationCategory;
 import org.elasticsearch.common.logging.DeprecationLogger;
+import org.elasticsearch.common.logging.HeaderWarning;
 import org.elasticsearch.core.Booleans;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.rest.BaseRestHandler;
@@ -152,6 +153,8 @@ public class RestSearchAction extends BaseRestHandler {
         IntConsumer setSize,
         BiConsumer<RestRequest, SearchRequest> extraParamParser
     ) throws IOException {
+
+
         if (searchRequest.source() == null) {
             searchRequest.source(new SearchSourceBuilder());
         }
@@ -186,6 +189,10 @@ public class RestSearchAction extends BaseRestHandler {
             searchRequest.allowPartialSearchResults(request.paramAsBoolean("allow_partial_search_results", null));
         }
 
+        if (request.hasParam("allow_modified_partial_search_results")) {
+            searchRequest.allowModifiedPartialSearchResults(request.paramAsBoolean("allow_modified_partial_search_results", null));
+        }
+
         searchRequest.searchType(request.param("search_type"));
         parseSearchSource(searchRequest.source(), request, setSize);
         searchRequest.requestCache(request.paramAsBoolean("request_cache", searchRequest.requestCache()));
@@ -212,7 +219,7 @@ public class RestSearchAction extends BaseRestHandler {
                 request.paramAsBoolean("ccs_minimize_roundtrips", searchRequest.isCcsMinimizeRoundtrips())
             );
         }
-
+        HeaderWarning.addWarning(searchRequest.buildDescription());
         extraParamParser.accept(request, searchRequest);
     }
 
