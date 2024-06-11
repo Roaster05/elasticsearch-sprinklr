@@ -339,6 +339,7 @@ public final class ClusterSettings extends AbstractScopedSettings {
                 SearchService.DEFAULT_ALLOW_MODIFIED_PARTIAL_SEARCH_RESULTS,
                 ElectMasterService.DISCOVERY_ZEN_MINIMUM_MASTER_NODES_SETTING,
                 TransportSearchAction.SHARD_COUNT_LIMIT_SETTING,
+                TransportSearchAction.MODIFIED_PARTIAL_SEARCH_RESULT_LIMIT,
                 TransportSearchAction.DEFAULT_PRE_FILTER_SHARD_SIZE,
                 RemoteClusterService.REMOTE_CLUSTER_SKIP_UNAVAILABLE,
                 RemoteClusterService.SEARCH_REMOTE_CLUSTER_SKIP_UNAVAILABLE,
