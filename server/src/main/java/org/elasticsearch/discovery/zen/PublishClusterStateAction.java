@@ -480,7 +480,6 @@ public class PublishClusterStateAction {
                 // If true we received full cluster state - otherwise diffs
                 if (in.readBoolean()) {
                     incomingState = ClusterState.readFrom(in, transportService.getLocalNode());
-                    BlacklistData.getInstance().mergeAndConvertBlacklist(incomingState.clusterblacklist());
                     fullClusterStateReceivedCount.incrementAndGet();
                     logger.debug(
                         "received full cluster state version [{}] with size [{}]",
@@ -490,7 +489,6 @@ public class PublishClusterStateAction {
                 } else if (lastSeenClusterState != null) {
                     Diff<ClusterState> diff = ClusterState.readDiffFrom(in, lastSeenClusterState.nodes().getLocalNode());
                     incomingState = diff.apply(lastSeenClusterState);
-                    BlacklistData.getInstance().mergeAndConvertBlacklist(incomingState.clusterblacklist());
                     compatibleClusterStateDiffReceivedCount.incrementAndGet();
                     logger.debug(
                         "received diff cluster state version [{}] with uuid [{}], diff size [{}]",
