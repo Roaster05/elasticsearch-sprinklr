@@ -173,24 +173,33 @@ public class RestSearchAction extends BaseRestHandler {
             RestCancellableNodeClient cancelClient = new RestCancellableNodeClient(client, request.getHttpChannel());
             cancelClient.execute(SearchAction.INSTANCE, searchRequest, new RestStatusToXContentListener<>(channel));
 
-            // Updating the blacklist without affecting the search response
-            String blacklistUpdate = BlacklistData.getInstance().convertBlacklistToString();
-            client.updateBlacklist(blacklistUpdate, new ActionListener<BlacklistUpdateResponse>() {
-                @Override
+            /**
+             * Pushing a Blacklist Update Action only if the lock is being set as true means there is a need to sync
+             * the local storage with the global cache as our cache is ahead of it so had to commit a new state.
+             */
+            if(BlacklistData.getInstance().getLock())
+            {
+                // Updating the blacklist without affecting the search response
+                String blacklistUpdate = BlacklistData.getInstance().convertBlacklistToString();
+                client.updateBlacklist(blacklistUpdate, new ActionListener<BlacklistUpdateResponse>() {
+                    @Override
 
-                public void onResponse(BlacklistUpdateResponse blacklistUpdateResponse) {
-                    // to handle if we receive acknowledged for cluster state update
-                    return;
-                }
+                    public void onResponse(BlacklistUpdateResponse blacklistUpdateResponse) {
+                        // to handle if we receive acknowledged for cluster state update
+                        BlacklistData.getInstance().setLock(false);
+                        return;
+                    }
 
-                @Override
-                public void onFailure(Exception e) {
-                    // We can handle failure of cluster state update as well but currently not altering the response of search
-                    //even if received a failure
-                    return;
+                    @Override
+                    public void onFailure(Exception e) {
+                        // We can handle failure of cluster state update as well but currently not altering the response of search
+                        //even if received a failure
+                        return;
 
-                }
-            });
+                    }
+                });
+
+            }
         };
     }
 

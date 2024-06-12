@@ -13,6 +13,7 @@ public class BlacklistData {
     public long threshold2 = 1000;
     public boolean allowed = false;
     public String nodename = "";
+    public boolean lock = false;
 
     public String getnode()
     {
@@ -74,6 +75,14 @@ public class BlacklistData {
         return threshold2;
     }
 
+    public boolean getLock() {
+        return lock;
+    }
+
+    public void setLock(boolean val) {
+        this.lock = val;
+    }
+
     public boolean getAllowed() {
         return allowed;
     }
@@ -98,6 +107,7 @@ public class BlacklistData {
     public void addToBlacklist(String query, String identifier, long tookInMillis) {
 
         if (query != null && !query.contains("kibana") && !query.contains("migration")) {
+            lock=true;
             blacklist.addEntry(new BlacklistEntry(query, identifier, tookInMillis, LocalDateTime.now()));
         }
     }
