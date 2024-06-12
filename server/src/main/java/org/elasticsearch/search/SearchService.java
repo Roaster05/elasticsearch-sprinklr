@@ -170,12 +170,6 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
         Property.Dynamic,
         Property.NodeScope
     );
-    public static final Setting<Boolean>BLACKLIST_RESET = Setting.boolSetting(
-        "search.blacklist_reset",
-        false,
-        Property.NodeScope,
-        Property.Dynamic
-    );
     public static final Setting<TimeValue> DEFAULT_KEEPALIVE_SETTING = Setting.positiveTimeSetting(
         "search.default_keep_alive",
         timeValueMinutes(5),
@@ -332,8 +326,6 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
         clusterService.getClusterSettings().addSettingsUpdateConsumer(BLACKLIST_THRESHOLD1, this::setBlacklistThreshold1);
 
         clusterService.getClusterSettings().addSettingsUpdateConsumer(BLACKLIST_THRESHOLD2, this::setBlacklistThreshold2);
-
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(BLACKLIST_RESET, this::setBlacklistReset);
 
         clusterService.getClusterSettings().addSettingsUpdateConsumer(BLACKLIST_ALLOWED, this::setBlacklistAllowed);
 

@@ -14,6 +14,7 @@ public class BlacklistData {
     public boolean allowed = false;
     public String nodename = "";
     public boolean lock = false;
+    public boolean reset = false;
 
     public String getnode()
     {
@@ -80,6 +81,14 @@ public class BlacklistData {
     }
 
     public void setLock(boolean val) {
+        this.lock = val;
+    }
+
+    public boolean getReset() {
+        return lock;
+    }
+
+    public void setReset(boolean val) {
         this.lock = val;
     }
 

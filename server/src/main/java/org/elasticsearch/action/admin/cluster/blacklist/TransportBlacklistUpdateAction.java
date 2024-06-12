@@ -15,8 +15,18 @@ import org.elasticsearch.common.Priority;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
+import org.elasticsearch.common.settings.Setting;
+import org.elasticsearch.common.settings.Setting.Property;
 
 public class TransportBlacklistUpdateAction extends TransportMasterNodeAction<BlacklistUpdateRequest, BlacklistUpdateResponse> {
+
+    public Boolean reset = false;
+    public static final Setting<Boolean>BLACKLIST_RESET = Setting.boolSetting(
+        "search.blacklist_reset",
+        false,
+        Property.NodeScope,
+        Property.Dynamic
+    );
 
     @Inject
     public TransportBlacklistUpdateAction(
@@ -36,6 +46,18 @@ public class TransportBlacklistUpdateAction extends TransportMasterNodeAction<Bl
             BlacklistUpdateResponse::new,
             ThreadPool.Names.SAME
         );
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(BLACKLIST_RESET, this::setBlacklistReset);
+    }
+
+    private void setBlacklistReset(boolean blacklistReset)
+    {
+        if(blacklistReset)
+        {
+            reset = true;
+            BlacklistData.getInstance().resetStorage();
+            BlacklistData.getInstance().setReset(true);
+        }
+
     }
 
     @Override
@@ -72,6 +94,11 @@ public class TransportBlacklistUpdateAction extends TransportMasterNodeAction<Bl
 
                 @Override
                 public ClusterState execute(ClusterState currentState) throws Exception {
+                    if(reset)
+                    {
+                        reset = false;
+                        BlacklistData.getInstance().resetStorage();
+                    }
                     return ClusterState.builder(currentState).clusterblacklist(BlacklistData.getInstance().convertBlacklistToString()).build();
                 }
 
