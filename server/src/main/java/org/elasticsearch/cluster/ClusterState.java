@@ -47,8 +47,10 @@ import org.elasticsearch.xcontent.XContentBuilder;
 
 import java.io.IOException;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -349,6 +351,41 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         return routingNodes;
     }
 
+    public static String formatClusterBlacklist(String clusterblacklist) {
+        StringBuilder sb = new StringBuilder();
+        List<String[]> entries = new ArrayList<>();
+
+        // Split the entries based on #
+        String[] rawEntries = clusterblacklist.split("#");
+
+        // Split each entry into parameters based on @ and store in the list
+        for (String entry : rawEntries) {
+            entries.add(entry.split("@"));
+        }
+
+        // Add table header
+        sb.append(String.format("%-50s%-40s%-20s%-30s%n", "Summary", "UUID", "Code", "Timestamp"));
+        sb.append("-------------------------------------------------------------------------------------------------------------\n");
+
+        // Add table rows
+        for (String[] entry : entries) {
+            if (entry.length == 4) { // Ensure each entry has exactly 4 parameters
+                String summary = extractSummary(entry[0]);
+                sb.append(String.format("%-50s%-40s%-20s%-30s%n", summary, entry[1], entry[2], entry[3]));
+            }
+        }
+
+        return sb.toString();
+    }
+
+    public static String extractSummary(String param) {
+        int index = param.indexOf("[]");
+        if (index != -1 && index + 2 < param.length()) {
+            return param.substring(index + 2);
+        }
+        return param;
+    }
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
@@ -361,7 +398,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             .append("\n");
         sb.append("version: ").append(version).append("\n");
         sb.append("state uuid: ").append(stateUUID).append("\n");
-        sb.append("cluster blacklist:").append(clusterblacklist).append("\n");
+        sb.append("cluster blacklist:").append("\n").append(formatClusterBlacklist(clusterblacklist)).append("\n");
         sb.append("from_diff: ").append(wasReadFromDiff).append("\n");
         sb.append("meta data version: ").append(metadata.version()).append("\n");
         sb.append(TAB).append("coordination_metadata:\n");
@@ -492,7 +529,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         if (metrics.contains(Metric.VERSION)) {
             builder.field("version", version);
             builder.field("state_uuid", stateUUID);
-            builder.field("blacklist_size",clusterblacklist);
+            builder.field("blacklist_size",formatClusterBlacklist(clusterblacklist));
         }
 
         if (metrics.contains(Metric.MASTER_NODE)) {

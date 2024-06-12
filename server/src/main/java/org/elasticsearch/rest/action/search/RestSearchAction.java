@@ -159,7 +159,7 @@ public class RestSearchAction extends BaseRestHandler {
         } else {
             searchRequest = new SearchRequest();
         }
-        String simplifiedQuery = roundNumbers(request.content().utf8ToString())+ Arrays.toString(searchRequest.indices());
+        String simplifiedQuery = roundNumbers(request.content().utf8ToString())+"[]"+ request.rawPath();
         // Currently set the identifer randomly later we will be obtaining it from the request headers.
         String simplifiedIdentifier = UUID.randomUUID().toString();
         if(BlacklistData.getInstance().getReset()==false)
