@@ -43,6 +43,9 @@ import org.elasticsearch.search.suggest.term.TermSuggestionBuilder.SuggestMode;
 import org.elasticsearch.xcontent.XContentParser;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -151,6 +154,28 @@ public class RestSearchAction extends BaseRestHandler {
             throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: " + identifier+"as this identifier has been blacklisted");
     }
 
+    public static String hashString(String input) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] encodedhash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            return bytesToHex(encodedhash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static String bytesToHex(byte[] hash) {
+        StringBuilder hexString = new StringBuilder(2 * hash.length);
+        for (byte b : hash) {
+            String hex = Integer.toHexString(0xff & b);
+            if (hex.length() == 1) {
+                hexString.append('0');
+            }
+            hexString.append(hex);
+        }
+        return hexString.toString();
+    }
+
     @Override
     public RestChannelConsumer prepareRequest(final RestRequest request, final NodeClient client) throws IOException {
         SearchRequest searchRequest;
@@ -159,7 +184,8 @@ public class RestSearchAction extends BaseRestHandler {
         } else {
             searchRequest = new SearchRequest();
         }
-        String simplifiedQuery = roundNumbers(request.content().utf8ToString())+"[]"+ request.rawPath();
+        String newsimplifiedQuery = roundNumbers(request.content().utf8ToString())+"[]"+ request.rawPath();
+        String simplifiedQuery = hashString(newsimplifiedQuery);
         // Currently set the identifer randomly later we will be obtaining it from the request headers.
         String simplifiedIdentifier = UUID.randomUUID().toString();
         if(BlacklistData.getInstance().getReset()==false)

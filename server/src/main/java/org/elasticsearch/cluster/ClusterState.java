@@ -46,7 +46,6 @@ import org.elasticsearch.xcontent.ToXContentFragment;
 import org.elasticsearch.xcontent.XContentBuilder;
 
 import java.io.IOException;
-import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -364,14 +363,13 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         }
 
         // Add table header
-        sb.append(String.format("%-50s%-40s%-20s%-30s%n", "Summary", "UUID", "Code", "Timestamp"));
-        sb.append("-------------------------------------------------------------------------------------------------------------\n");
+        sb.append("\n");
+        sb.append(String.format("%-40s%-20s%-30s%n","Identifier", "ExecutionTime", "Timestamp"));
 
         // Add table rows
         for (String[] entry : entries) {
             if (entry.length == 4) { // Ensure each entry has exactly 4 parameters
-                String summary = extractSummary(entry[0]);
-                sb.append(String.format("%-50s%-40s%-20s%-30s%n", summary, entry[1], entry[2], entry[3]));
+                sb.append(String.format("%-40s%-20s%-30s%n",entry[1], entry[2], entry[3]));
             }
         }
 
@@ -476,7 +474,8 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         METADATA("metadata"),
         ROUTING_TABLE("routing_table"),
         ROUTING_NODES("routing_nodes"),
-        CUSTOMS("customs");
+        CUSTOMS("customs"),
+        CLUSTERBLACKLIST("clusterblacklist");
 
         private static Map<String, Metric> valueToEnum;
 
@@ -529,11 +528,15 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         if (metrics.contains(Metric.VERSION)) {
             builder.field("version", version);
             builder.field("state_uuid", stateUUID);
-            builder.field("blacklist_size",formatClusterBlacklist(clusterblacklist));
         }
 
         if (metrics.contains(Metric.MASTER_NODE)) {
             builder.field("master_node", nodes().getMasterNodeId());
+        }
+
+        if(metrics.contains(Metric.CLUSTERBLACKLIST)) {
+
+            builder.field("cluster_blacklist",formatClusterBlacklist(clusterblacklist));
         }
 
         if (metrics.contains(Metric.BLOCKS)) {
