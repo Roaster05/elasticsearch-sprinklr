@@ -19,11 +19,13 @@ import org.elasticsearch.action.support.HandledTransportAction;
 import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.ClusterState;
+import org.elasticsearch.cluster.ClusterStateUpdateTask;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexAbstraction;
 import org.elasticsearch.cluster.metadata.IndexMetadata;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
+import org.elasticsearch.cluster.metadata.Metadata;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.cluster.routing.GroupShardsIterator;
@@ -113,6 +115,20 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         Property.NodeScope
     );
 
+    public static final Setting<String> PARTIAL_SEARCH_RESULT_INDICES = Setting.simpleString(
+        "action.search.partial_search_result_indices",
+        "",
+        Property.NodeScope,
+        Property.Dynamic
+    );
+
+    public static final Setting<String> PARTIAL_SEARCH_RESULT_INDICES_REMOVE = Setting.simpleString(
+        "action.search.partial_search_result_indices_remove",
+        "",
+        Property.NodeScope,
+        Property.Dynamic
+    );
+
     public static final Setting<Integer> DEFAULT_PRE_FILTER_SHARD_SIZE = Setting.intSetting(
         "action.search.pre_filter_shard_size.default",
         SearchRequest.DEFAULT_PRE_FILTER_SHARD_SIZE,
@@ -159,6 +175,8 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         this.namedWriteableRegistry = namedWriteableRegistry;
         this.executorSelector = executorSelector;
         this.defaultPreFilterShardSize = DEFAULT_PRE_FILTER_SHARD_SIZE.get(clusterService.getSettings());
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(PARTIAL_SEARCH_RESULT_INDICES,this::applyPartialSearchResultIndices);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(PARTIAL_SEARCH_RESULT_INDICES_REMOVE,this::applyPartialSearchResultIndicesRemove);
     }
 
     private Map<String, OriginalIndices> buildPerIndexOriginalIndices(
@@ -197,6 +215,46 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         }
         return Collections.unmodifiableMap(res);
     }
+
+
+    private void applyPartialSearchResultIndices(String newValue) {
+        Set<String> indexNames = new HashSet<>(Arrays.asList(newValue.split(",")));
+        updatePartialSearchResultFlag(indexNames,true);
+    }
+
+    private void applyPartialSearchResultIndicesRemove(String newValue) {
+        Set<String> indexNames = new HashSet<>(Arrays.asList(newValue.split(",")));
+        updatePartialSearchResultFlag(indexNames,false);
+    }
+
+    private void updatePartialSearchResultFlag(Set<String> indexNames,boolean value) {
+        clusterService.submitStateUpdateTask("update-partial-search-result-flag",
+            new ClusterStateUpdateTask() {
+                @Override
+                public ClusterState execute(ClusterState currentState) {
+                    Metadata.Builder metadataBuilder = Metadata.builder(currentState.metadata());
+
+                    for (String indexName : indexNames) {
+                        IndexMetadata indexMetadata = currentState.metadata().index(indexName);
+                        if (indexMetadata == null) {
+                            throw new IndexNotFoundException("Index [" + indexName + "] not found");
+                        }
+                        IndexMetadata.Builder indexMetadataBuilder = IndexMetadata.builder(indexMetadata)
+                            .partialSearchAllowed(value);
+
+                        metadataBuilder.put(indexMetadataBuilder);
+                    }
+
+                    return ClusterState.builder(currentState).metadata(metadataBuilder).build();
+                }
+
+                @Override
+                public void onFailure(String source, Exception e) {
+                    logger.error("Failed to update partial search result flag for indices", e);
+                }
+            });
+    }
+
 
     private Map<String, AliasFilter> buildPerIndexAliasFilter(
         ClusterState clusterState,
@@ -911,6 +969,26 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         return indices;
     }
 
+    @SuppressWarnings("checkstyle:DescendantToken")
+    public void checkPartialSearchResultsFlag(SearchRequest searchRequest, ClusterState clusterState) {
+        boolean allowPartialResults = true;
+
+        for (String index : searchRequest.indices()) {
+            IndexMetadata indexMetadata = clusterState.metadata().index(index);
+
+            if (indexMetadata != null) {
+                if (!indexMetadata.isPartialSearchAllowed()) {
+                    allowPartialResults = false;
+                    break;  // No need to check further if one is false
+                }
+            } else {
+                throw new IndexNotFoundException("Index [" + index + "] not found");
+            }
+        }
+
+        searchRequest.allowPartialSearchResults(allowPartialResults);
+    }
+
     private void executeSearch(
         SearchTask task,
         SearchTimeProvider timeProvider,
@@ -990,6 +1068,8 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         final GroupShardsIterator<SearchShardIterator> shardIterators = mergeShardsIterators(localShardIterators, remoteShardIterators);
 
         failIfOverShardCountLimit(clusterService, shardIterators.size());
+
+        checkPartialSearchResultsFlag(searchRequest,clusterState);
 
         if (searchRequest.getWaitForCheckpoints().isEmpty() == false) {
             if (remoteShardIterators.isEmpty() == false) {
@@ -1469,3 +1549,4 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         return iterators;
     }
 }
+

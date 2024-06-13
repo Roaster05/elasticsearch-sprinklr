@@ -414,6 +414,7 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
     static final String KEY_ALIASES = "aliases";
     static final String KEY_ROLLOVER_INFOS = "rollover_info";
     static final String KEY_SYSTEM = "system";
+    static final String KEY_PARTIAL_SEARCH_ALLOWED = "partial_search_allowed";
     static final String KEY_TIMESTAMP_RANGE = "timestamp_range";
     public static final String KEY_PRIMARY_TERMS = "primary_terms";
 
@@ -463,6 +464,7 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
     private final ActiveShardCount waitForActiveShards;
     private final ImmutableOpenMap<String, RolloverInfo> rolloverInfos;
     private final boolean isSystem;
+    private final boolean isPartialSearchAllowed;
     private final boolean isHidden;
 
     private final IndexLongFieldRange timestampRange;
@@ -539,6 +541,82 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
         this.waitForActiveShards = waitForActiveShards;
         this.rolloverInfos = rolloverInfos;
         this.isSystem = isSystem;
+        assert isHidden == INDEX_HIDDEN_SETTING.get(settings);
+        this.isHidden = isHidden;
+        this.timestampRange = timestampRange;
+        this.priority = priority;
+        this.creationDate = creationDate;
+        this.ignoreDiskWatermarks = ignoreDiskWatermarks;
+        this.tierPreference = tierPreference;
+        this.isPartialSearchAllowed = false;
+        assert numberOfShards * routingFactor == routingNumShards : routingNumShards + " must be a multiple of " + numberOfShards;
+    }
+
+    private IndexMetadata(
+        final Index index,
+        final long version,
+        final long mappingVersion,
+        final long settingsVersion,
+        final long aliasesVersion,
+        final long[] primaryTerms,
+        final State state,
+        final int numberOfShards,
+        final int numberOfReplicas,
+        final Settings settings,
+        final ImmutableOpenMap<String, MappingMetadata> mappings,
+        final ImmutableOpenMap<String, AliasMetadata> aliases,
+        final ImmutableOpenMap<String, DiffableStringMap> customData,
+        final ImmutableOpenIntMap<Set<String>> inSyncAllocationIds,
+        final DiscoveryNodeFilters requireFilters,
+        final DiscoveryNodeFilters initialRecoveryFilters,
+        final DiscoveryNodeFilters includeFilters,
+        final DiscoveryNodeFilters excludeFilters,
+        final Version indexCreatedVersion,
+        final int routingNumShards,
+        final int routingPartitionSize,
+        final ActiveShardCount waitForActiveShards,
+        final ImmutableOpenMap<String, RolloverInfo> rolloverInfos,
+        final boolean isSystem,
+        final boolean isHidden,
+        final IndexLongFieldRange timestampRange,
+        final int priority,
+        final long creationDate,
+        final boolean ignoreDiskWatermarks,
+        @Nullable final List<String> tierPreference,
+        final boolean isPartialSearchAllowed
+    ) {
+
+        this.index = index;
+        this.version = version;
+        assert mappingVersion >= 0 : mappingVersion;
+        this.mappingVersion = mappingVersion;
+        assert settingsVersion >= 0 : settingsVersion;
+        this.settingsVersion = settingsVersion;
+        assert aliasesVersion >= 0 : aliasesVersion;
+        this.aliasesVersion = aliasesVersion;
+        this.primaryTerms = primaryTerms;
+        assert primaryTerms.length == numberOfShards;
+        this.state = state;
+        this.numberOfShards = numberOfShards;
+        this.numberOfReplicas = numberOfReplicas;
+        this.totalNumberOfShards = numberOfShards * (numberOfReplicas + 1);
+        this.settings = settings;
+        this.mappings = mappings;
+        this.customData = customData;
+        this.aliases = aliases;
+        this.inSyncAllocationIds = inSyncAllocationIds;
+        this.requireFilters = requireFilters;
+        this.includeFilters = includeFilters;
+        this.excludeFilters = excludeFilters;
+        this.initialRecoveryFilters = initialRecoveryFilters;
+        this.indexCreatedVersion = indexCreatedVersion;
+        this.routingNumShards = routingNumShards;
+        this.routingFactor = routingNumShards / numberOfShards;
+        this.routingPartitionSize = routingPartitionSize;
+        this.waitForActiveShards = waitForActiveShards;
+        this.rolloverInfos = rolloverInfos;
+        this.isSystem = isSystem;
+        this.isPartialSearchAllowed = isPartialSearchAllowed;
         assert isHidden == INDEX_HIDDEN_SETTING.get(settings);
         this.isHidden = isHidden;
         this.timestampRange = timestampRange;
@@ -833,6 +911,9 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
         if (isSystem != that.isSystem) {
             return false;
         }
+        if(isPartialSearchAllowed!=that.isPartialSearchAllowed) {
+            return false;
+        }
         return true;
     }
 
@@ -851,6 +932,7 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
         result = 31 * result + inSyncAllocationIds.hashCode();
         result = 31 * result + rolloverInfos.hashCode();
         result = 31 * result + Boolean.hashCode(isSystem);
+        result = 31 * result + Boolean.hashCode(isPartialSearchAllowed);
         return result;
     }
 
@@ -890,6 +972,7 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
         private final Diff<ImmutableOpenIntMap<Set<String>>> inSyncAllocationIds;
         private final Diff<ImmutableOpenMap<String, RolloverInfo>> rolloverInfos;
         private final boolean isSystem;
+        private boolean isPartialSearchAllowed=false;
         private final IndexLongFieldRange timestampRange;
 
         IndexMetadataDiff(IndexMetadata before, IndexMetadata after) {
@@ -913,6 +996,7 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
             );
             rolloverInfos = DiffableUtils.diff(before.rolloverInfos, after.rolloverInfos, DiffableUtils.getStringKeySerializer());
             isSystem = after.isSystem;
+            //isPartialSearchAllowed = after.isPartialSearchAllowed;
             timestampRange = after.timestampRange;
         }
 
@@ -966,6 +1050,11 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
                 isSystem = false;
             }
             timestampRange = IndexLongFieldRange.readFrom(in);
+            /*if (in.getVersion().onOrAfter(SYSTEM_INDEX_FLAG_ADDED)) {
+                isPartialSearchAllowed = in.readBoolean();
+            } else {
+                isPartialSearchAllowed = false;
+            }*/
         }
 
         @Override
@@ -996,6 +1085,9 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
                 out.writeBoolean(isSystem);
             }
             timestampRange.writeTo(out);
+            /*if (out.getVersion().onOrAfter(SYSTEM_INDEX_FLAG_ADDED)) {
+                out.writeBoolean(isPartialSearchAllowed);
+            }*/
         }
 
         @Override
@@ -1015,6 +1107,7 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
             builder.inSyncAllocationIds.putAll(inSyncAllocationIds.apply(part.inSyncAllocationIds));
             builder.rolloverInfos.putAll(rolloverInfos.apply(part.rolloverInfos));
             builder.system(isSystem);
+            builder.partialSearchAllowed(isPartialSearchAllowed);
             builder.timestampRange(timestampRange);
             return builder.build();
         }
@@ -1126,11 +1219,16 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
             out.writeBoolean(isSystem);
         }
         timestampRange.writeTo(out);
+        /*if (out.getVersion().onOrAfter(SYSTEM_INDEX_FLAG_ADDED)) {
+            out.writeBoolean(isPartialSearchAllowed);
+        }*/
     }
 
     public boolean isSystem() {
         return isSystem;
     }
+
+    public boolean isPartialSearchAllowed() { return isPartialSearchAllowed; }
 
     public boolean isHidden() {
         return isHidden;
@@ -1165,6 +1263,7 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
         private final ImmutableOpenMap.Builder<String, RolloverInfo> rolloverInfos;
         private Integer routingNumShards;
         private boolean isSystem;
+        private boolean isPartialSearchAllowed;
         private IndexLongFieldRange timestampRange = IndexLongFieldRange.NO_SHARDS;
 
         public Builder(String index) {
@@ -1175,6 +1274,7 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
             this.inSyncAllocationIds = ImmutableOpenIntMap.builder();
             this.rolloverInfos = ImmutableOpenMap.builder();
             this.isSystem = false;
+            this.isPartialSearchAllowed = false;
         }
 
         public Builder(IndexMetadata indexMetadata) {
@@ -1193,6 +1293,7 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
             this.inSyncAllocationIds = ImmutableOpenIntMap.builder(indexMetadata.inSyncAllocationIds);
             this.rolloverInfos = ImmutableOpenMap.builder(indexMetadata.rolloverInfos);
             this.isSystem = indexMetadata.isSystem;
+            this.isPartialSearchAllowed = indexMetadata.isPartialSearchAllowed;
             this.timestampRange = indexMetadata.timestampRange;
         }
 
@@ -1398,9 +1499,16 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
             return this;
         }
 
+        public Builder partialSearchAllowed (boolean PartialSearchAllowed) {
+            this.isPartialSearchAllowed = PartialSearchAllowed;
+            return this;
+        }
+
         public boolean isSystem() {
             return isSystem;
         }
+
+        public boolean isPartialSearchAllowed() { return isPartialSearchAllowed; }
 
         public Builder timestampRange(IndexLongFieldRange timestampRange) {
             this.timestampRange = timestampRange;
@@ -1556,7 +1664,8 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
                 IndexMetadata.INDEX_PRIORITY_SETTING.get(settings),
                 settings.getAsLong(SETTING_CREATION_DATE, -1L),
                 DiskThresholdDecider.SETTING_IGNORE_DISK_WATERMARKS.get(settings),
-                tierPreference
+                tierPreference,
+                isPartialSearchAllowed
             );
         }
 
@@ -1656,6 +1765,7 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
             }
             builder.endObject();
             builder.field(KEY_SYSTEM, indexMetadata.isSystem);
+            builder.field(KEY_PARTIAL_SEARCH_ALLOWED,indexMetadata.isPartialSearchAllowed);
 
             builder.startObject(KEY_TIMESTAMP_RANGE);
             indexMetadata.timestampRange.toXContent(builder, params);
@@ -1785,7 +1895,10 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
                         builder.setRoutingNumShards(parser.intValue());
                     } else if (KEY_SYSTEM.equals(currentFieldName)) {
                         builder.system(parser.booleanValue());
-                    } else {
+                    }
+                    else if(KEY_PARTIAL_SEARCH_ALLOWED.equals(currentFieldName)) {
+                        builder.partialSearchAllowed(parser.booleanValue());
+                    }else {
                         throw new IllegalArgumentException("Unexpected field [" + currentFieldName + "]");
                     }
                 } else {
