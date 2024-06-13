@@ -143,7 +143,11 @@ public class MetadataUpdateSettingsService {
                             )
                         );
                     }
-
+                    if(IndexMetadata.INDEX_PARTIAL_SEARCH_RESULT_ALLOWED_SETTING.exists(openSettings))
+                    {
+                        final boolean updatePartialSearchAllowed = IndexMetadata.INDEX_PARTIAL_SEARCH_RESULT_ALLOWED_SETTING.get(openSettings);
+                        metadataBuilder.updatePartialSearchAllowed(updatePartialSearchAllowed,actualIndices);
+                    }
                     if (IndexMetadata.INDEX_NUMBER_OF_REPLICAS_SETTING.exists(openSettings)) {
                         final int updatedNumberOfReplicas = IndexMetadata.INDEX_NUMBER_OF_REPLICAS_SETTING.get(openSettings);
                         if (preserveExisting == false) {
