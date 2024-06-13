@@ -114,21 +114,6 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         Property.Dynamic,
         Property.NodeScope
     );
-
-    public static final Setting<String> PARTIAL_SEARCH_RESULT_INDICES = Setting.simpleString(
-        "action.search.partial_search_result_indices",
-        "",
-        Property.NodeScope,
-        Property.Dynamic
-    );
-
-    public static final Setting<String> PARTIAL_SEARCH_RESULT_INDICES_REMOVE = Setting.simpleString(
-        "action.search.partial_search_result_indices_remove",
-        "",
-        Property.NodeScope,
-        Property.Dynamic
-    );
-
     public static final Setting<Integer> DEFAULT_PRE_FILTER_SHARD_SIZE = Setting.intSetting(
         "action.search.pre_filter_shard_size.default",
         SearchRequest.DEFAULT_PRE_FILTER_SHARD_SIZE,
@@ -175,8 +160,6 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         this.namedWriteableRegistry = namedWriteableRegistry;
         this.executorSelector = executorSelector;
         this.defaultPreFilterShardSize = DEFAULT_PRE_FILTER_SHARD_SIZE.get(clusterService.getSettings());
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(PARTIAL_SEARCH_RESULT_INDICES,this::applyPartialSearchResultIndices);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(PARTIAL_SEARCH_RESULT_INDICES_REMOVE,this::applyPartialSearchResultIndicesRemove);
     }
 
     private Map<String, OriginalIndices> buildPerIndexOriginalIndices(
@@ -216,44 +199,6 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         return Collections.unmodifiableMap(res);
     }
 
-
-    private void applyPartialSearchResultIndices(String newValue) {
-        Set<String> indexNames = new HashSet<>(Arrays.asList(newValue.split(",")));
-        updatePartialSearchResultFlag(indexNames,true);
-    }
-
-    private void applyPartialSearchResultIndicesRemove(String newValue) {
-        Set<String> indexNames = new HashSet<>(Arrays.asList(newValue.split(",")));
-        updatePartialSearchResultFlag(indexNames,false);
-    }
-
-    private void updatePartialSearchResultFlag(Set<String> indexNames,boolean value) {
-        clusterService.submitStateUpdateTask("update-partial-search-result-flag",
-            new ClusterStateUpdateTask() {
-                @Override
-                public ClusterState execute(ClusterState currentState) {
-                    Metadata.Builder metadataBuilder = Metadata.builder(currentState.metadata());
-
-                    for (String indexName : indexNames) {
-                        IndexMetadata indexMetadata = currentState.metadata().index(indexName);
-                        if (indexMetadata == null) {
-                            throw new IndexNotFoundException("Index [" + indexName + "] not found");
-                        }
-                        IndexMetadata.Builder indexMetadataBuilder = IndexMetadata.builder(indexMetadata)
-                            .partialSearchAllowed(value);
-
-                        metadataBuilder.put(indexMetadataBuilder);
-                    }
-
-                    return ClusterState.builder(currentState).metadata(metadataBuilder).build();
-                }
-
-                @Override
-                public void onFailure(String source, Exception e) {
-                    logger.error("Failed to update partial search result flag for indices", e);
-                }
-            });
-    }
 
 
     private Map<String, AliasFilter> buildPerIndexAliasFilter(

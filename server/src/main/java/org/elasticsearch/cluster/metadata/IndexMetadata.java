@@ -182,6 +182,14 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
         Property.IndexScope
     );
 
+    public static final String SETTING_PARTIAL_SEARCH_ALLOWED = "index.partial_search_allowed";
+    public static final Setting<Boolean> INDEX_PARTIAL_SEARCH_RESULT_ALLOWED_SETTING = Setting.boolSetting(
+        SETTING_PARTIAL_SEARCH_ALLOWED,
+        false,
+        Property.Dynamic,
+        Property.IndexScope
+    );
+
     public static final String SETTING_ROUTING_PARTITION_SIZE = "index.routing_partition_size";
     public static final Setting<Integer> INDEX_ROUTING_PARTITION_SIZE_SETTING = Setting.intSetting(
         SETTING_ROUTING_PARTITION_SIZE,
@@ -1541,6 +1549,8 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
                 throw new IllegalArgumentException("must specify number of replicas for index [" + index + "]");
             }
             final int numberOfReplicas = INDEX_NUMBER_OF_REPLICAS_SETTING.get(settings);
+
+            final boolean isPartialSearchAllowed = INDEX_PARTIAL_SEARCH_RESULT_ALLOWED_SETTING.get(settings);
 
             int routingPartitionSize = INDEX_ROUTING_PARTITION_SIZE_SETTING.get(settings);
             if (routingPartitionSize != 1 && routingPartitionSize >= getRoutingNumShards()) {
