@@ -11,6 +11,8 @@ public class BlacklistEntry {
 
     private static final DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
 
+    private static final long EXPIRATION_INTERVAL_HOURS = 6; // Entry expiration interval in minutes
+
     public BlacklistEntry(String query, String identifier, long executionTime, LocalDateTime timestamp) {
         this.query = query;
         this.identifier = identifier;
@@ -32,6 +34,10 @@ public class BlacklistEntry {
 
     public LocalDateTime getTimestamp() {
         return timestamp;
+    }
+
+    public boolean isExpired() {
+        return LocalDateTime.now().isAfter(timestamp.plusHours(EXPIRATION_INTERVAL_HOURS));
     }
 
     @Override
@@ -65,4 +71,3 @@ public class BlacklistEntry {
         }
     }
 }
-

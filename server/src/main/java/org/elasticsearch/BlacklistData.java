@@ -1,9 +1,10 @@
 package org.elasticsearch;
 
-
 import java.time.LocalDateTime;
 import java.util.Objects;
-
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @SuppressWarnings("checkstyle:MissingJavadocType")
 public class BlacklistData {
@@ -16,18 +17,20 @@ public class BlacklistData {
     public boolean lock = false;
     public boolean reset = false;
 
-    public String getnode()
-    {
+    private ScheduledExecutorService scheduler;
+
+    public String getnode() {
         return nodename;
     }
 
-    public void setnode(String nodename)
-    {
+    public void setnode(String nodename) {
         this.nodename = nodename;
     }
 
     private BlacklistData() {
         blacklist = new Blacklist();
+        scheduler = Executors.newScheduledThreadPool(1);
+        startCleanupTask();
     }
 
     public static synchronized BlacklistData getInstance() {
@@ -35,6 +38,14 @@ public class BlacklistData {
             instance = new BlacklistData();
         }
         return instance;
+    }
+
+    private void startCleanupTask() {
+        scheduler.scheduleAtFixedRate(() -> {
+            synchronized (this) {
+                blacklist.removeExpiredEntries();
+            }
+        }, 0, 1, TimeUnit.MINUTES); // Cleanup every minute
     }
 
     @SuppressWarnings("checkstyle:DescendantToken")
@@ -114,9 +125,8 @@ public class BlacklistData {
     as they might get added while setting up these.
      */
     public void addToBlacklist(String query, String identifier, long tookInMillis) {
-
         if (query != null && !query.contains("kibana") && !query.contains("migration")) {
-            lock=true;
+            lock = true;
             blacklist.addEntry(new BlacklistEntry(query, identifier, tookInMillis, LocalDateTime.now()));
         }
     }
@@ -162,11 +172,24 @@ public class BlacklistData {
     }
 
     public String convertBlacklistToString() {
+        // Before converting to string, ensure only valid (non-expired) entries are considered
+        blacklist.removeExpiredEntries();
         return blacklist.toString();
     }
 
+    /**
+     *
+     * @param newEntriesStr are the new entries which are being received from the newly applied cluster state and then this state is being
+     *                      applied to the node based cache which is our blacklist List, also the concurrency is being maintained which
+     *                      avoids any obvious reason of state corruption.
+     * @return
+     */
     public String mergeAndConvertBlacklist(String newEntriesStr) {
         Blacklist newEntries = Blacklist.fromString(newEntriesStr);
+        // Remove expired entries from the new blacklist
+        newEntries.removeExpiredEntries();
+        // Remove expired entries from the existing blacklist before merging
+        blacklist.removeExpiredEntries();
         setBlacklist(getBlacklist(newEntries)); // Merge new entries with existing ones
         return convertBlacklistToString();
     }
