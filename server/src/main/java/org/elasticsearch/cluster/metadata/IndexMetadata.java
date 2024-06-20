@@ -984,11 +984,6 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
                 isSystem = false;
             }
             timestampRange = IndexLongFieldRange.readFrom(in);
-            /*if (in.getVersion().onOrAfter(SYSTEM_INDEX_FLAG_ADDED)) {
-                isPartialSearchAllowed = in.readBoolean();
-            } else {
-                isPartialSearchAllowed = false;
-            }*/
         }
 
         @Override
@@ -1019,9 +1014,6 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
                 out.writeBoolean(isSystem);
             }
             timestampRange.writeTo(out);
-            /*if (out.getVersion().onOrAfter(SYSTEM_INDEX_FLAG_ADDED)) {
-                out.writeBoolean(isPartialSearchAllowed);
-            }*/
         }
 
         @Override
@@ -1153,9 +1145,6 @@ public class IndexMetadata implements Diffable<IndexMetadata>, ToXContentFragmen
             out.writeBoolean(isSystem);
         }
         timestampRange.writeTo(out);
-        /*if (out.getVersion().onOrAfter(SYSTEM_INDEX_FLAG_ADDED)) {
-            out.writeBoolean(isPartialSearchAllowed);
-        }*/
     }
 
     public boolean isSystem() {
