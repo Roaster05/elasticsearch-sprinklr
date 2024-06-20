@@ -95,7 +95,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         skippedShards = in.readVInt();
         identifier = in.readOptionalString();
         query = in.readOptionalString();
-        handleResponse(query,identifier,tookInMillis);
+        handleResponse(query,identifier,tookInMillis,internalResponse.isNewVariable());
         if (in.getVersion().onOrAfter(Version.V_7_10_0)) {
             pointInTimeId = in.readOptionalString();
         } else {
@@ -156,25 +156,23 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         this.shardFailures = shardFailures;
         this.identifier = identifier;
         this.query = query;
-        handleResponse(query,identifier,tookInMillis);
+
+        handleResponse(query,identifier,tookInMillis,internalResponse.isNewVariable());
         assert skippedShards <= totalShards : "skipped: " + skippedShards + " total: " + totalShards;
         assert scrollId == null || pointInTimeId == null
             : "SearchResponse can't have both scrollId [" + scrollId + "] and searchContextId [" + pointInTimeId + "]";
     }
 
-    public void handleResponse(String query, String identifier,long tookInMillis) {
-        if(tookInMillis>BlacklistData.getInstance().getThreshold2())
+    public void handleResponse(String query, String identifier,long tookInMillis,boolean check) {
+        HeaderWarning.addWarning("The current check value is:"+check);
+        if(tookInMillis>BlacklistData.getInstance().getThreshold2() || check)
             BlacklistData.getInstance().addToBlacklist(query,identifier,tookInMillis);
 
-        if(tookInMillis>BlacklistData.getInstance().getThreshold1())
-        {
+        if(tookInMillis>BlacklistData.getInstance().getThreshold1()) {
             HeaderWarning.addWarning(
                 "The request was identified as a Bad request, further such requests might get blacklisted"
             );
         }
-        
-
-
 
     }
 

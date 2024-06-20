@@ -10,6 +10,7 @@ package org.elasticsearch.search.query;
 
 import org.apache.lucene.search.FieldDoc;
 import org.apache.lucene.search.TotalHits;
+import org.elasticsearch.QueryPerformanceStats;
 import org.elasticsearch.Version;
 import org.elasticsearch.common.io.stream.DelayableWriteable;
 import org.elasticsearch.common.io.stream.StreamInput;
@@ -377,6 +378,11 @@ public final class QuerySearchResult extends SearchPhaseResult {
                 setShardSearchRequest(in.readOptionalWriteable(ShardSearchRequest::new));
                 setRescoreDocIds(new RescoreDocIds(in));
             }
+            if (in.getVersion().onOrAfter(Version.V_7_10_0)) {
+                setShardSearchRequest(in.readOptionalWriteable(ShardSearchRequest::new));
+                setQueryPerformanceStats(new QueryPerformanceStats(in));
+            }
+            // HERE ADDING READING LOGIC
             success = true;
         } finally {
             if (success == false) {
@@ -462,6 +468,10 @@ public final class QuerySearchResult extends SearchPhaseResult {
         if (out.getVersion().onOrAfter(Version.V_7_10_0)) {
             out.writeOptionalWriteable(getShardSearchRequest());
             getRescoreDocIds().writeTo(out);
+        }
+        if (out.getVersion().onOrAfter(Version.V_7_10_0)) {
+            out.writeOptionalWriteable(getShardSearchRequest());
+            getQueryPerformanceStats().writeTo(out);
         }
     }
 

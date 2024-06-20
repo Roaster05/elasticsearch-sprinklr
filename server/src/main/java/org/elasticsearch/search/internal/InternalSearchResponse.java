@@ -1,11 +1,3 @@
-/*
- * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
- */
-
 package org.elasticsearch.search.internal;
 
 import org.elasticsearch.action.search.SearchResponseSections;
@@ -29,7 +21,7 @@ public class InternalSearchResponse extends SearchResponseSections implements Wr
     }
 
     public static InternalSearchResponse empty(boolean withTotalHits) {
-        return new InternalSearchResponse(SearchHits.empty(withTotalHits), null, null, null, false, null, 1);
+        return new InternalSearchResponse(SearchHits.empty(withTotalHits), null, null, null, false, null, 1, false);
     }
 
     public InternalSearchResponse(
@@ -41,7 +33,20 @@ public class InternalSearchResponse extends SearchResponseSections implements Wr
         Boolean terminatedEarly,
         int numReducePhases
     ) {
-        super(hits, aggregations, suggest, timedOut, terminatedEarly, profileResults, numReducePhases);
+        this(hits, aggregations, suggest, profileResults, timedOut, terminatedEarly, numReducePhases, false);
+    }
+
+    public InternalSearchResponse(
+        SearchHits hits,
+        InternalAggregations aggregations,
+        Suggest suggest,
+        SearchProfileResults profileResults,
+        boolean timedOut,
+        Boolean terminatedEarly,
+        int numReducePhases,
+        boolean newVariable
+    ) {
+        super(hits, aggregations, suggest, timedOut, terminatedEarly, profileResults, numReducePhases, newVariable);
     }
 
     public InternalSearchResponse(StreamInput in) throws IOException {
@@ -52,7 +57,8 @@ public class InternalSearchResponse extends SearchResponseSections implements Wr
             in.readBoolean(),
             in.readOptionalBoolean(),
             in.readOptionalWriteable(SearchProfileResults::new),
-            in.readVInt()
+            in.readVInt(),
+            in.readBoolean() // Read newVariable from the stream
         );
     }
 
@@ -65,5 +71,6 @@ public class InternalSearchResponse extends SearchResponseSections implements Wr
         out.writeOptionalBoolean(terminatedEarly);
         out.writeOptionalWriteable(profileResults);
         out.writeVInt(numReducePhases);
+        out.writeBoolean(isNewVariable()); // Write newVariable to the stream
     }
 }

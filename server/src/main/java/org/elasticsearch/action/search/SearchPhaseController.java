@@ -23,8 +23,10 @@ import org.apache.lucene.search.TopFieldDocs;
 import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.search.TotalHits.Relation;
 import org.apache.lucene.search.grouping.CollapseTopFieldDocs;
+import org.elasticsearch.QueryPerformanceStats;
 import org.elasticsearch.common.breaker.CircuitBreaker;
 import org.elasticsearch.common.collect.HppcMaps;
+import org.elasticsearch.common.logging.HeaderWarning;
 import org.elasticsearch.common.lucene.search.TopDocsAndMaxScore;
 import org.elasticsearch.search.DocValueFormat;
 import org.elasticsearch.search.SearchHit;
@@ -266,6 +268,7 @@ public final class SearchPhaseController {
      * Expects sortedDocs to have top search docs across all shards, optionally followed by top suggest docs for each named
      * completion suggestion ordered by suggestion name
      */
+    @SuppressWarnings("checkstyle:DescendantToken")
     public InternalSearchResponse merge(
         boolean ignoreFrom,
         ReducedQueryPhase reducedQueryPhase,
@@ -275,10 +278,35 @@ public final class SearchPhaseController {
         if (reducedQueryPhase.isEmptyResult) {
             return InternalSearchResponse.empty();
         }
+
+        // Iterate through each SearchPhaseResult
+        boolean isQueueDiffLessThanMinusTwo = false;
+        HeaderWarning.addWarning(String.valueOf(fetchResults.size()));
+
+        for (SearchPhaseResult fetchResult : fetchResults) {
+            if (fetchResult != null) {
+                QueryPerformanceStats queryPerformanceStats = fetchResult.getQueryPerformanceStats();
+                if (queryPerformanceStats != null) {
+                    HeaderWarning.addWarning("Threadpool stats for shard: " + queryPerformanceStats);
+
+                    // Check the queueSizeDiff value for the "search" thread pool
+                    Integer queueDiff = queryPerformanceStats.getQueueSizeDiff().get("search");
+                    if (queueDiff != null && queueDiff < -2) {
+                        isQueueDiffLessThanMinusTwo = true;
+                        break; // Exit loop if condition is met
+                    }
+                }
+            } else {
+                HeaderWarning.addWarning("FetchSearchResult is null");
+            }
+        }
+
+        // Here we can perform some checks to identify the query threat and will pass that information to InternalSearchResponse
+
         ScoreDoc[] sortedDocs = reducedQueryPhase.sortedTopDocs.scoreDocs;
         SearchHits hits = getHits(reducedQueryPhase, ignoreFrom, fetchResults, resultsLookup);
         if (reducedQueryPhase.suggest != null) {
-            if (fetchResults.isEmpty() == false) {
+            if (!fetchResults.isEmpty()) {
                 int currentOffset = hits.getHits().length;
                 for (CompletionSuggestion suggestion : reducedQueryPhase.suggest.filter(CompletionSuggestion.class)) {
                     final List<CompletionSuggestion.Entry.Option> suggestionOptions = suggestion.getOptions();
@@ -286,10 +314,6 @@ public final class SearchPhaseController {
                         ScoreDoc shardDoc = sortedDocs[scoreDocIndex];
                         SearchPhaseResult searchResultProvider = resultsLookup.apply(shardDoc.shardIndex);
                         if (searchResultProvider == null) {
-                            // this can happen if we are hitting a shard failure during the fetch phase
-                            // in this case we referenced the shard result via the ScoreDoc but never got a
-                            // result from fetch.
-                            // TODO it would be nice to assert this in the future
                             continue;
                         }
                         FetchSearchResult fetchResult = searchResultProvider.fetchResult();
@@ -297,9 +321,9 @@ public final class SearchPhaseController {
                         assert index < fetchResult.hits().getHits().length
                             : "not enough hits fetched. index [" + index + "] length: " + fetchResult.hits().getHits().length;
                         SearchHit hit = fetchResult.hits().getHits()[index];
-                        CompletionSuggestion.Entry.Option suggestOption = suggestionOptions.get(scoreDocIndex - currentOffset);
                         hit.score(shardDoc.score);
                         hit.shard(fetchResult.getSearchShardTarget());
+                        CompletionSuggestion.Entry.Option suggestOption = suggestionOptions.get(scoreDocIndex - currentOffset);
                         suggestOption.setHit(hit);
                     }
                     currentOffset += suggestionOptions.size();
@@ -307,8 +331,10 @@ public final class SearchPhaseController {
                 assert currentOffset == sortedDocs.length : "expected no more score doc slices";
             }
         }
-        return reducedQueryPhase.buildResponse(hits, fetchResults);
+
+        return reducedQueryPhase.buildResponse(hits, fetchResults, isQueueDiffLessThanMinusTwo);
     }
+
 
     private SearchHits getHits(
         ReducedQueryPhase reducedQueryPhase,
@@ -655,7 +681,8 @@ public final class SearchPhaseController {
          * Creates a new search response from the given merged hits.
          * @see #merge(boolean, ReducedQueryPhase, Collection, IntFunction)
          */
-        public InternalSearchResponse buildResponse(SearchHits hits, Collection<? extends SearchPhaseResult> fetchResults) {
+        @SuppressWarnings("checkstyle:LineLength")
+        public InternalSearchResponse buildResponse(SearchHits hits, Collection<? extends SearchPhaseResult> fetchResults, boolean isQueueDiffLessThanMinusTwo) {
             return new InternalSearchResponse(
                 hits,
                 aggregations,
@@ -663,7 +690,8 @@ public final class SearchPhaseController {
                 buildSearchProfileResults(fetchResults),
                 timedOut,
                 terminatedEarly,
-                numReducePhases
+                numReducePhases,
+                isQueueDiffLessThanMinusTwo
             );
         }
 

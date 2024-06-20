@@ -157,7 +157,7 @@ public class BlacklistData {
             return 2;
         }
         long queryCount = blacklist.getEntries().stream()
-            .filter(entry -> Objects.equals(entry.getQuery(), query) && entry.getExecutionTime() > threshold1)
+            .filter(entry -> Objects.equals(entry.getQuery(), query))
             .count();
 
         if (queryCount >= 15) {

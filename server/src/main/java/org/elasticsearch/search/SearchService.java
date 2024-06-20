@@ -17,6 +17,7 @@ import org.apache.lucene.search.TopDocs;
 import org.elasticsearch.BlacklistData;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.ElasticsearchTimeoutException;
+import org.elasticsearch.QueryPerformanceStats;
 import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionRunnable;
@@ -122,6 +123,7 @@ import org.elasticsearch.threadpool.ThreadPool.Names;
 import org.elasticsearch.transport.TransportRequest;
 
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -668,6 +670,9 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
             SearchContext context = createContext(readerContext, request, task, true)
         ) {
             final long afterQueryTime;
+            QueryPerformanceStats stats = new QueryPerformanceStats();
+            stats.captureInitialStats(threadPool.stats(), ManagementFactory.getMemoryMXBean(), ManagementFactory.getGarbageCollectorMXBeans()
+                , clusterService.getNodeName());
             try (SearchOperationListenerExecutor executor = new SearchOperationListenerExecutor(context)) {
                 loadOrExecuteQueryPhase(request, context);
                 if (context.queryResult().hasSearchContext() == false && readerContext.singleSession()) {
@@ -682,6 +687,8 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
                 // We also pass the rescoreDocIds to the LegacyReaderContext in case the search state needs to stay in the data node.
                 final RescoreDocIds rescoreDocIds = context.rescoreDocIds();
                 context.queryResult().setRescoreDocIds(rescoreDocIds);
+                stats.captureAndCalculateDiffs(threadPool.stats(),ManagementFactory.getMemoryMXBean(),ManagementFactory.getGarbageCollectorMXBeans());
+                context.queryResult().setQueryPerformanceStats(stats);
                 readerContext.setRescoreDocIds(rescoreDocIds);
                 return context.queryResult();
             }
@@ -744,6 +751,7 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
         }, wrapFailureListener(listener, readerContext, markAsUsed));
     }
 
+    @SuppressWarnings("checkstyle:LineLength")
     public void executeQueryPhase(QuerySearchRequest request, SearchShardTask task, ActionListener<QuerySearchResult> listener) {
         final ReaderContext readerContext = findReaderContext(request.contextId(), request.shardSearchRequest());
         final ShardSearchRequest shardSearchRequest = readerContext.getShardSearchRequest(request.shardSearchRequest());
@@ -755,7 +763,7 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
                 SearchOperationListenerExecutor executor = new SearchOperationListenerExecutor(searchContext)
             ) {
                 searchContext.searcher().setAggregatedDfs(request.dfs());
-                queryPhase.execute(searchContext);
+                queryPhase.execute(searchContext); // actual execution here
                 if (searchContext.queryResult().hasSearchContext() == false && readerContext.singleSession()) {
                     // no hits, we can release the context since there will be no fetch phase
                     freeReaderContext(readerContext.id());

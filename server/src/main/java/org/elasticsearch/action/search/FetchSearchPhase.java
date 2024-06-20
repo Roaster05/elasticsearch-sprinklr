@@ -12,6 +12,7 @@ import com.carrotsearch.hppc.IntArrayList;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.apache.lucene.search.ScoreDoc;
+import org.elasticsearch.QueryPerformanceStats;
 import org.elasticsearch.action.OriginalIndices;
 import org.elasticsearch.common.util.concurrent.AbstractRunnable;
 import org.elasticsearch.common.util.concurrent.AtomicArray;
@@ -105,18 +106,31 @@ final class FetchSearchPhase extends SearchPhase {
         });
     }
 
+    @SuppressWarnings("checkstyle:DescendantToken")
     private void innerRun() throws Exception {
         final int numShards = context.getNumShards();
         final boolean isScrollSearch = context.getRequest().scroll() != null;
         final List<SearchPhaseResult> phaseResults = queryResults.asList();
         final SearchPhaseController.ReducedQueryPhase reducedQueryPhase = resultConsumer.reduce();
         final boolean queryAndFetchOptimization = queryResults.length() == 1;
-        final Runnable finishPhase = () -> moveToNextPhase(
-            searchPhaseController,
-            queryResults,
-            reducedQueryPhase,
-            queryAndFetchOptimization ? queryResults : fetchResults.getAtomicArray()
-        );
+        final Runnable finishPhase = () -> {
+            if (!queryAndFetchOptimization) {
+                for (int i = 0; i < queryResults.length(); i++) {
+                    SearchPhaseResult queryResult = queryResults.get(i);
+                    FetchSearchResult fetchResult = fetchResults.getAtomicArray().get(i);
+                    if (queryResult != null && fetchResult != null) {
+                        fetchResult.setQueryPerformanceStats(queryResult.getQueryPerformanceStats());
+                    }
+                }
+            }
+
+            moveToNextPhase(
+                searchPhaseController,
+                queryResults,
+                reducedQueryPhase,
+                queryAndFetchOptimization ? queryResults : fetchResults.getAtomicArray()
+            );
+        };
         if (queryAndFetchOptimization) {
             assert phaseResults.isEmpty() || phaseResults.get(0).fetchResult() != null
                 : "phaseResults empty [" + phaseResults.isEmpty() + "], single result: " + phaseResults.get(0).fetchResult();
@@ -140,7 +154,6 @@ final class FetchSearchPhase extends SearchPhase {
                     finishPhase,
                     context
                 );
-
                 FieldsOptionSourceAdapter fieldsOptionAdapter = new FieldsOptionSourceAdapter(context.getRequest());
                 for (int i = 0; i < docIdsToLoad.length; i++) {
                     IntArrayList entry = docIdsToLoad[i];
@@ -165,7 +178,8 @@ final class FetchSearchPhase extends SearchPhase {
                             lastEmittedDocPerShard,
                             context.getOriginalIndices(queryResult.getShardIndex()),
                             queryResult.getShardSearchRequest(),
-                            queryResult.getRescoreDocIds()
+                            queryResult.getRescoreDocIds(),
+                            queryResult.getQueryPerformanceStats()
                         );
                         executeFetch(
                             queryResult.getShardIndex(),
@@ -189,8 +203,8 @@ final class FetchSearchPhase extends SearchPhase {
         ScoreDoc[] lastEmittedDocPerShard,
         OriginalIndices originalIndices,
         ShardSearchRequest shardSearchRequest,
-        RescoreDocIds rescoreDocIds
-    ) {
+        RescoreDocIds rescoreDocIds,
+        QueryPerformanceStats queryPerformanceStats) {
         final ScoreDoc lastEmittedDoc = (lastEmittedDocPerShard != null) ? lastEmittedDocPerShard[index] : null;
         return new ShardFetchSearchRequest(
             originalIndices,

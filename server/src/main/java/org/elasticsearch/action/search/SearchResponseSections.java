@@ -1,11 +1,3 @@
-/*
- * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
- */
-
 package org.elasticsearch.action.search;
 
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -38,6 +30,7 @@ public class SearchResponseSections implements ToXContentFragment {
     protected final boolean timedOut;
     protected final Boolean terminatedEarly;
     protected final int numReducePhases;
+    protected final boolean newVariable; // New boolean variable
 
     public SearchResponseSections(
         SearchHits hits,
@@ -48,6 +41,19 @@ public class SearchResponseSections implements ToXContentFragment {
         SearchProfileResults profileResults,
         int numReducePhases
     ) {
+        this(hits, aggregations, suggest, timedOut, terminatedEarly, profileResults, numReducePhases, false);
+    }
+
+    public SearchResponseSections(
+        SearchHits hits,
+        Aggregations aggregations,
+        Suggest suggest,
+        boolean timedOut,
+        Boolean terminatedEarly,
+        SearchProfileResults profileResults,
+        int numReducePhases,
+        boolean newVariable // Constructor with new variable
+    ) {
         this.hits = hits;
         this.aggregations = aggregations;
         this.suggest = suggest;
@@ -55,6 +61,7 @@ public class SearchResponseSections implements ToXContentFragment {
         this.timedOut = timedOut;
         this.terminatedEarly = terminatedEarly;
         this.numReducePhases = numReducePhases;
+        this.newVariable = newVariable;
     }
 
     public final boolean timedOut() {
@@ -95,6 +102,10 @@ public class SearchResponseSections implements ToXContentFragment {
             return Collections.emptyMap();
         }
         return profileResults.getShardResults();
+    }
+
+    public boolean isNewVariable() { // Getter for the new variable
+        return newVariable;
     }
 
     @Override
