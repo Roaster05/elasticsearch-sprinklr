@@ -1643,6 +1643,17 @@ public class Metadata implements Iterable<IndexMetadata>, Diffable<Metadata>, To
             return this;
         }
 
+        public Builder updatePartialSearchAllowed(final boolean partialSearchAllowed,final String[]indices) {
+            for (String index : indices) {
+                IndexMetadata indexMetadata = this.indices.get(index);
+                if (indexMetadata == null) {
+                    throw new IndexNotFoundException(index);
+                }
+                put(IndexMetadata.builder(indexMetadata).partialSearchAllowed(partialSearchAllowed));
+            }
+            return this;
+        }
+
         public Builder coordinationMetadata(CoordinationMetadata coordinationMetadata) {
             this.coordinationMetadata = coordinationMetadata;
             return this;
