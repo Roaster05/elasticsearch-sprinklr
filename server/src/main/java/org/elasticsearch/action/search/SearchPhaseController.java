@@ -25,6 +25,7 @@ import org.apache.lucene.search.TotalHits.Relation;
 import org.apache.lucene.search.grouping.CollapseTopFieldDocs;
 import org.elasticsearch.common.breaker.CircuitBreaker;
 import org.elasticsearch.common.collect.HppcMaps;
+import org.elasticsearch.common.logging.HeaderWarning;
 import org.elasticsearch.common.lucene.search.TopDocsAndMaxScore;
 import org.elasticsearch.search.DocValueFormat;
 import org.elasticsearch.search.SearchHit;
@@ -47,6 +48,7 @@ import org.elasticsearch.search.query.QuerySearchResult;
 import org.elasticsearch.search.suggest.Suggest;
 import org.elasticsearch.search.suggest.Suggest.Suggestion;
 import org.elasticsearch.search.suggest.completion.CompletionSuggestion;
+import org.elasticsearch.threadpool.ThreadPoolStats;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -60,10 +62,11 @@ import java.util.function.Consumer;
 import java.util.function.IntFunction;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.Iterator;
+
 
 public final class SearchPhaseController {
     private static final ScoreDoc[] EMPTY_DOCS = new ScoreDoc[0];
-
     private final BiFunction<Supplier<Boolean>, SearchRequest, InternalAggregation.ReduceContextBuilder> requestToAggReduceContextBuilder;
 
     public SearchPhaseController(
@@ -317,6 +320,35 @@ public final class SearchPhaseController {
         IntFunction<SearchPhaseResult> resultsLookup
     ) {
         SortedTopDocs sortedTopDocs = reducedQueryPhase.sortedTopDocs;
+
+        boolean isQueueDifferenceGreaterThanTwo = false;
+
+        for (SearchPhaseResult result : fetchResults) {
+            if (result.getBeforeStats() != null && result.getAfterStats() != null) {
+                ThreadPoolStats beforeStats = result.getBeforeStats();
+                ThreadPoolStats afterStats = result.getAfterStats();
+
+                // Compare the stats
+                Iterator<ThreadPoolStats.Stats> beforeIterator = beforeStats.iterator();
+                Iterator<ThreadPoolStats.Stats> afterIterator = afterStats.iterator();
+
+                while (beforeIterator.hasNext() && afterIterator.hasNext()) {
+                    ThreadPoolStats.Stats beforeStat = beforeIterator.next();
+                    ThreadPoolStats.Stats afterStat = afterIterator.next();
+
+                    if (afterStat.getQueue() - beforeStat.getQueue() > 2) {
+                        isQueueDifferenceGreaterThanTwo = true;
+                        break;
+                    }
+                }
+            }
+
+            if (isQueueDifferenceGreaterThanTwo) {
+                HeaderWarning.addWarning("The queue was increased by 2 for this search query");
+                break;
+            }
+        }
+
         int sortScoreIndex = -1;
         if (sortedTopDocs.isSortedByField) {
             SortField[] sortFields = sortedTopDocs.sortFields;

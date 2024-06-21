@@ -15,6 +15,7 @@ import org.elasticsearch.search.fetch.FetchSearchResult;
 import org.elasticsearch.search.internal.ShardSearchContextId;
 import org.elasticsearch.search.internal.ShardSearchRequest;
 import org.elasticsearch.search.query.QuerySearchResult;
+import org.elasticsearch.threadpool.ThreadPoolStats;
 import org.elasticsearch.transport.TransportResponse;
 
 import java.io.IOException;
@@ -34,6 +35,9 @@ public abstract class SearchPhaseResult extends TransportResponse {
     protected ShardSearchContextId contextId;
     private ShardSearchRequest shardSearchRequest;
     private RescoreDocIds rescoreDocIds = RescoreDocIds.EMPTY;
+
+    private ThreadPoolStats beforeStats;
+    private ThreadPoolStats afterStats;
 
     protected SearchPhaseResult() {
 
@@ -104,6 +108,15 @@ public abstract class SearchPhaseResult extends TransportResponse {
     public void setRescoreDocIds(RescoreDocIds rescoreDocIds) {
         this.rescoreDocIds = rescoreDocIds;
     }
+
+    public ThreadPoolStats getBeforeStats() {return beforeStats;}
+
+    public void setBeforeStats(ThreadPoolStats beforeStats) { this.beforeStats = beforeStats; }
+
+    public ThreadPoolStats getAfterStats() { return afterStats; }
+
+    public void setAfterStats(ThreadPoolStats afterStats) {this.afterStats = afterStats; }
+
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {

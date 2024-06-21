@@ -667,6 +667,7 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
             Releasable ignored = readerContext.markAsUsed(getKeepAlive(request));
             SearchContext context = createContext(readerContext, request, task, true)
         ) {
+            context.queryResult().setBeforeStats(threadPool.stats());
             final long afterQueryTime;
             try (SearchOperationListenerExecutor executor = new SearchOperationListenerExecutor(context)) {
                 loadOrExecuteQueryPhase(request, context);
@@ -674,6 +675,7 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
                     freeReaderContext(readerContext.id());
                 }
                 afterQueryTime = executor.success();
+                context.queryResult().setAfterStats(threadPool.stats());
             }
             if (request.numberOfShards() == 1) {
                 return executeFetchPhase(readerContext, context, afterQueryTime);

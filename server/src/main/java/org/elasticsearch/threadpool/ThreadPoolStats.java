@@ -1,11 +1,3 @@
-/*
- * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
- */
-
 package org.elasticsearch.threadpool;
 
 import org.elasticsearch.common.io.stream.StreamInput;
@@ -132,6 +124,19 @@ public class ThreadPoolStats implements Writeable, ToXContentFragment, Iterable<
                 return compare;
             }
         }
+
+        @Override
+        public String toString() {
+            return "Stats{" +
+                "name='" + name + '\'' +
+                ", threads=" + threads +
+                ", queue=" + queue +
+                ", active=" + active +
+                ", rejected=" + rejected +
+                ", largest=" + largest +
+                ", completed=" + completed +
+                '}';
+        }
     }
 
     private List<Stats> stats;
@@ -173,5 +178,19 @@ public class ThreadPoolStats implements Writeable, ToXContentFragment, Iterable<
         }
         builder.endObject();
         return builder;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("ThreadPoolStats{");
+        sb.append("stats=");
+        for (Stats stat : stats) {
+            sb.append(stat.toString()).append(",");
+        }
+        if (!stats.isEmpty()) {
+            sb.setLength(sb.length() - 1); // Remove the trailing comma
+        }
+        sb.append('}');
+        return sb.toString();
     }
 }

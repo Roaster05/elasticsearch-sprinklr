@@ -111,12 +111,25 @@ final class FetchSearchPhase extends SearchPhase {
         final List<SearchPhaseResult> phaseResults = queryResults.asList();
         final SearchPhaseController.ReducedQueryPhase reducedQueryPhase = resultConsumer.reduce();
         final boolean queryAndFetchOptimization = queryResults.length() == 1;
-        final Runnable finishPhase = () -> moveToNextPhase(
-            searchPhaseController,
-            queryResults,
-            reducedQueryPhase,
-            queryAndFetchOptimization ? queryResults : fetchResults.getAtomicArray()
-        );
+        final Runnable finishPhase = () -> {
+            if (queryAndFetchOptimization==false) {
+                for (int i = 0; i < queryResults.length(); i++) {
+                    SearchPhaseResult queryResult = queryResults.get(i);
+                    FetchSearchResult fetchResult = fetchResults.getAtomicArray().get(i);
+                    if (queryResult != null && fetchResult != null) {
+                        fetchResult.setBeforeStats(queryResult.getBeforeStats());
+                        fetchResult.setAfterStats(queryResult.getAfterStats());
+                    }
+                }
+            }
+
+            moveToNextPhase(
+                searchPhaseController,
+                queryResults,
+                reducedQueryPhase,
+                queryAndFetchOptimization ? queryResults : fetchResults.getAtomicArray()
+            );
+        };
         if (queryAndFetchOptimization) {
             assert phaseResults.isEmpty() || phaseResults.get(0).fetchResult() != null
                 : "phaseResults empty [" + phaseResults.isEmpty() + "], single result: " + phaseResults.get(0).fetchResult();

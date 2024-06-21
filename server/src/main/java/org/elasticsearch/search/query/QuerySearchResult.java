@@ -27,6 +27,7 @@ import org.elasticsearch.search.internal.ShardSearchContextId;
 import org.elasticsearch.search.internal.ShardSearchRequest;
 import org.elasticsearch.search.profile.SearchProfileQueryPhaseResult;
 import org.elasticsearch.search.suggest.Suggest;
+import org.elasticsearch.threadpool.ThreadPoolStats;
 
 import java.io.IOException;
 
@@ -377,6 +378,15 @@ public final class QuerySearchResult extends SearchPhaseResult {
                 setShardSearchRequest(in.readOptionalWriteable(ShardSearchRequest::new));
                 setRescoreDocIds(new RescoreDocIds(in));
             }
+            if (in.getVersion().onOrAfter(Version.V_7_10_0)) {
+                setShardSearchRequest(in.readOptionalWriteable(ShardSearchRequest::new));
+                setBeforeStats(new ThreadPoolStats(in));
+            }
+            if (in.getVersion().onOrAfter(Version.V_7_10_0)) {
+                setShardSearchRequest(in.readOptionalWriteable(ShardSearchRequest::new));
+                setAfterStats(new ThreadPoolStats(in));
+            }
+
             success = true;
         } finally {
             if (success == false) {
@@ -462,6 +472,20 @@ public final class QuerySearchResult extends SearchPhaseResult {
         if (out.getVersion().onOrAfter(Version.V_7_10_0)) {
             out.writeOptionalWriteable(getShardSearchRequest());
             getRescoreDocIds().writeTo(out);
+        }
+        if (out.getVersion().onOrAfter(Version.V_7_10_0)) {
+            out.writeOptionalWriteable(getShardSearchRequest());
+            if(getBeforeStats()==null)
+                out.writeString("");
+            else
+                getBeforeStats().writeTo(out);
+        }
+        if (out.getVersion().onOrAfter(Version.V_7_10_0)) {
+            out.writeOptionalWriteable(getShardSearchRequest());
+            if(getAfterStats()==null)
+                out.writeString("");
+            else
+                getAfterStats().writeTo(out);
         }
     }
 
