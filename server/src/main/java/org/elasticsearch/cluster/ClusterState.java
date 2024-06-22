@@ -10,7 +10,9 @@ package org.elasticsearch.cluster;
 
 import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
 
+import org.elasticsearch.Blacklist;
 import org.elasticsearch.BlacklistData;
+import org.elasticsearch.BlacklistEntry;
 import org.elasticsearch.Version;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.cluster.block.ClusterBlock;
@@ -46,6 +48,7 @@ import org.elasticsearch.xcontent.ToXContentFragment;
 import org.elasticsearch.xcontent.XContentBuilder;
 
 import java.io.IOException;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -174,7 +177,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
     // built on demand
     private volatile RoutingNodes routingNodes;
 
-    private final String  clusterblacklist;
+    private final Blacklist clusterblacklist;
 
     public ClusterState(long version, String stateUUID, ClusterState state) {
         this(
@@ -205,7 +208,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         int minimumMasterNodesOnPublishingMaster,
         boolean wasReadFromDiff,
         @Nullable RoutingNodes routingNodes,
-        String clusterblacklist
+        Blacklist clusterblacklist
     ) {
         this.version = version;
         this.stateUUID = stateUUID;
@@ -249,7 +252,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         return this.stateUUID;
     }
 
-    public String clusterblacklist() {
+    public Blacklist clusterblacklist() {
         return this.clusterblacklist;
     }
 
@@ -350,39 +353,34 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         return routingNodes;
     }
 
-    public static String formatClusterBlacklist(String clusterblacklist) {
+
+    public static String formatClusterBlacklist(Blacklist clusterblacklist) {
+        List<BlacklistEntry> entries = clusterblacklist.getEntries();
+
         StringBuilder sb = new StringBuilder();
-        List<String[]> entries = new ArrayList<>();
+        sb.append("[\n");
 
-        // Split the entries based on #
-        String[] rawEntries = clusterblacklist.split("#");
+        for (int i = 0; i < entries.size(); i++) {
+            BlacklistEntry entry = entries.get(i);
+            sb.append("{\n");
+            sb.append("  \"Identifier\": \"").append(entry.getIdentifier()).append("\",\n");
+            sb.append("  \"ExecutionTime\": ").append(entry.getExecutionTime()).append(",\n");
+            sb.append("  \"Timestamp\": \"").append(entry.getTimestamp().format(DateTimeFormatter.ISO_DATE_TIME)).append("\"\n");
+            sb.append("}");
 
-        // Split each entry into parameters based on @ and store in the list
-        for (String entry : rawEntries) {
-            entries.add(entry.split("@"));
-        }
-
-        // Add table header
-        sb.append("\n");
-        sb.append(String.format("%-40s%-20s%-30s%n","Identifier", "ExecutionTime", "Timestamp"));
-
-        // Add table rows
-        for (String[] entry : entries) {
-            if (entry.length == 4) { // Ensure each entry has exactly 4 parameters
-                sb.append(String.format("%-40s%-20s%-30s%n",entry[1], entry[2], entry[3]));
+            if (i < entries.size() - 1) {
+                sb.append(",\n");
+            } else {
+                sb.append("\n");
             }
         }
+
+        sb.append("]");
 
         return sb.toString();
     }
 
-    public static String extractSummary(String param) {
-        int index = param.indexOf("[]");
-        if (index != -1 && index + 2 < param.length()) {
-            return param.substring(index + 2);
-        }
-        return param;
-    }
+
 
     @Override
     public String toString() {
@@ -647,7 +645,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         private final ClusterName clusterName;
         private long version = 0;
         private String uuid = UNKNOWN_UUID;
-        private String clusterblacklist;
+        private Blacklist clusterblacklist;
         private Metadata metadata = Metadata.EMPTY_METADATA;
         private RoutingTable routingTable = RoutingTable.EMPTY_ROUTING_TABLE;
         private DiscoveryNodes nodes = DiscoveryNodes.EMPTY_NODES;
@@ -725,11 +723,11 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
 
         public Builder stateUUID(String uuid) {
             this.uuid = uuid;
-            this.clusterblacklist = BlacklistData.getInstance().mergeAndConvertBlacklist(clusterblacklist);
+            this.clusterblacklist = BlacklistData.getInstance().getBlacklist(clusterblacklist);
             return this;
         }
 
-        public Builder clusterblacklist(String newblacklist) {
+        public Builder clusterblacklist(Blacklist newblacklist) {
             this.clusterblacklist = newblacklist;
             return this;
         }
@@ -762,7 +760,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
 
         public ClusterState build() {
             if (UNKNOWN_UUID.equals(uuid)) {
-                clusterblacklist = BlacklistData.getInstance().mergeAndConvertBlacklist(clusterblacklist);
+                clusterblacklist = BlacklistData.getInstance().getBlacklist(clusterblacklist);
                 uuid = UUIDs.randomBase64UUID();
             }
             final RoutingNodes routingNodes;
@@ -821,8 +819,8 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         ClusterName clusterName = new ClusterName(in);
         Builder builder = new Builder(clusterName);
         builder.version = in.readLong();
-        builder.clusterblacklist = in.readString();
-        BlacklistData.getInstance().mergeAndConvertBlacklist(builder.clusterblacklist);
+        builder.clusterblacklist = Blacklist.readFrom(in);
+        BlacklistData.getInstance().getBlacklist(builder.clusterblacklist);
         builder.uuid = in.readString();
         builder.metadata = Metadata.readFrom(in);
         builder.routingTable = RoutingTable.readFrom(in);
@@ -841,10 +839,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
     public void writeTo(StreamOutput out) throws IOException {
         clusterName.writeTo(out);
         out.writeLong(version);
-        if(clusterblacklist==null)
-            out.writeString("");
-        else
-            out.writeString(clusterblacklist);
+        clusterblacklist.writeTo(out);
         out.writeString(stateUUID);
         metadata.writeTo(out);
         routingTable.writeTo(out);
@@ -872,7 +867,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
 
         private final long toVersion;
 
-        private final String clusterblacklist;
+        private final Blacklist clusterblacklist;
 
         private final String fromUuid;
 
@@ -897,7 +892,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             toUuid = after.stateUUID;
             toVersion = after.version;
             clusterblacklist = after.clusterblacklist;
-            BlacklistData.getInstance().mergeAndConvertBlacklist(clusterblacklist);
+            BlacklistData.getInstance().getBlacklist(clusterblacklist);
             clusterName = after.clusterName;
             routingTable = after.routingTable.diff(before.routingTable);
             nodes = after.nodes.diff(before.nodes);
@@ -908,16 +903,13 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         }
 
         ClusterStateDiff(StreamInput in, DiscoveryNode localNode) throws IOException {
+            this.clusterblacklist = new Blacklist();
             clusterName = new ClusterName(in);
             fromUuid = in.readString();
             toUuid = in.readString();
             toVersion = in.readLong();
-            if (in.getVersion().onOrAfter(Version.V_6_7_0)) {
-                clusterblacklist = in.readString();
-            } else {
-                clusterblacklist="";
-            }
-            BlacklistData.getInstance().mergeAndConvertBlacklist(clusterblacklist);
+            Blacklist.readFrom(in);
+            BlacklistData.getInstance().getBlacklist(clusterblacklist);
             routingTable = RoutingTable.readDiffFrom(in);
             nodes = DiscoveryNodes.readDiffFrom(in, localNode);
             metadata = Metadata.readDiffFrom(in);
@@ -932,12 +924,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             out.writeString(fromUuid);
             out.writeString(toUuid);
             out.writeLong(toVersion);
-            if (out.getVersion().onOrAfter(Version.V_6_7_0)) {
-                if(clusterblacklist==null)
-                    out.writeString("");
-                else
-                    out.writeString(clusterblacklist);
-            }
+            clusterblacklist.writeTo(out);
             routingTable.writeTo(out);
             nodes.writeTo(out);
             metadata.writeTo(out);
@@ -961,7 +948,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             builder.stateUUID(toUuid);
             builder.version(toVersion);
             builder.clusterblacklist(state.clusterblacklist);
-            BlacklistData.getInstance().mergeAndConvertBlacklist(state.clusterblacklist);
+            BlacklistData.getInstance().getBlacklist(state.clusterblacklist);
             builder.routingTable(routingTable.apply(state.routingTable));
             builder.nodes(nodes.apply(state.nodes));
             builder.metadata(metadata.apply(state.metadata));

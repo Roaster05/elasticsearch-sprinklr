@@ -8,6 +8,7 @@
 
 package org.elasticsearch.client.node;
 
+import org.elasticsearch.Blacklist;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.ActionResponse;
@@ -142,7 +143,7 @@ public class NodeClient extends AbstractClient {
         return remoteClusterService.getRemoteClusterClient(threadPool(), clusterAlias, true);
     }
 
-    public void updateBlacklist(String item, ActionListener<BlacklistUpdateResponse> listener) {
+    public void updateBlacklist(Blacklist item, ActionListener<BlacklistUpdateResponse> listener) {
         BlacklistUpdateRequest request = new BlacklistUpdateRequest(item);
         execute(BlacklistUpdateAction.INSTANCE, request, listener);
     }

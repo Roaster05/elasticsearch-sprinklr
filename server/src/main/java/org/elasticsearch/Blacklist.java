@@ -1,9 +1,11 @@
 package org.elasticsearch;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.stream.Collectors;
+import org.elasticsearch.common.io.stream.StreamInput;
+import org.elasticsearch.common.io.stream.StreamOutput;
 
 public class Blacklist {
     private List<BlacklistEntry> entries;
@@ -18,27 +20,6 @@ public class Blacklist {
 
     public List<BlacklistEntry> getEntries() {
         return entries;
-    }
-
-    @Override
-    public String toString() {
-        return entries.stream()
-            .map(BlacklistEntry::toString)
-            .collect(Collectors.joining("#"));
-    }
-
-    @SuppressWarnings("checkstyle:DescendantToken")
-    public static Blacklist fromString(String str) {
-        Blacklist blacklist = new Blacklist();
-        if (str != null && !str.isEmpty()) {
-            String[] entryStrings = str.split("#");
-            for (String entryString : entryStrings) {
-                if (!entryString.isEmpty()) {
-                    blacklist.addEntry(BlacklistEntry.fromString(entryString));
-                }
-            }
-        }
-        return blacklist;
     }
 
     public void clear() {
@@ -59,9 +40,26 @@ public class Blacklist {
             BlacklistEntry entry = iterator.next();
             if (entry.isExpired()) {
                 iterator.remove();
-            }
-            else
+            } else {
                 break;
+            }
+        }
+    }
+
+    public static Blacklist readFrom(StreamInput in) throws IOException {
+        Blacklist blacklist = new Blacklist();
+        int size = in.readVInt();
+        for (int i = 0; i < size; i++) {
+            BlacklistEntry entry = new BlacklistEntry(in);
+            blacklist.addEntry(entry);
+        }
+        return blacklist;
+    }
+
+    public void writeTo(StreamOutput out) throws IOException {
+        out.writeVInt(entries.size());
+        for (BlacklistEntry entry : entries) {
+            entry.writeTo(out);
         }
     }
 }

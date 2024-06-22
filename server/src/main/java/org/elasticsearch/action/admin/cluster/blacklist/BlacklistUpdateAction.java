@@ -1,7 +1,6 @@
 package org.elasticsearch.action.admin.cluster.blacklist;
 
 import org.elasticsearch.action.ActionType;
-import org.elasticsearch.common.logging.HeaderWarning;
 
 public class BlacklistUpdateAction extends ActionType<BlacklistUpdateResponse> {
 
@@ -11,6 +10,5 @@ public class BlacklistUpdateAction extends ActionType<BlacklistUpdateResponse> {
     private BlacklistUpdateAction() {
 
         super(NAME, BlacklistUpdateResponse::new);
-        HeaderWarning.addWarning("update action");
     }
 }

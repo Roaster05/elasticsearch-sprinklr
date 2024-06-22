@@ -515,7 +515,7 @@ public class ClusterApplierService extends AbstractLifecycleComponent implements
                 + newClusterState.nodes().getLocalNode();
 
         logger.debug("set locally applied cluster state to version {}", newClusterState.version());
-        BlacklistData.getInstance().mergeAndConvertBlacklist(newClusterState.clusterblacklist());
+        BlacklistData.getInstance().getBlacklist(newClusterState.clusterblacklist());
         state.set(newClusterState);
 
         callClusterStateListeners(clusterChangedEvent, stopWatch);

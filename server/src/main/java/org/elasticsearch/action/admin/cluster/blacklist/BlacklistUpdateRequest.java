@@ -1,5 +1,6 @@
 package org.elasticsearch.action.admin.cluster.blacklist;
 
+import org.elasticsearch.Blacklist;
 import org.elasticsearch.action.support.master.MasterNodeRequest;
 import org.elasticsearch.action.ActionRequestValidationException;
 import org.elasticsearch.cluster.ack.AckedRequest;
@@ -11,18 +12,18 @@ import java.io.IOException;
 
 public class BlacklistUpdateRequest extends MasterNodeRequest<BlacklistUpdateRequest> implements AckedRequest {
 
-    private String blacklistItem;
+    private Blacklist blacklistItem;
 
     public BlacklistUpdateRequest(StreamInput in) throws IOException {
         super(in);
-        blacklistItem = in.readString();
+        blacklistItem = Blacklist.readFrom(in);
     }
 
-    public BlacklistUpdateRequest(String blacklistItem) {
+    public BlacklistUpdateRequest(Blacklist blacklistItem) {
         this.blacklistItem = blacklistItem;
     }
 
-    public String getBlacklistItem() {
+    public Blacklist getBlacklistItem() {
         return blacklistItem;
     }
 
@@ -34,7 +35,7 @@ public class BlacklistUpdateRequest extends MasterNodeRequest<BlacklistUpdateReq
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeString(blacklistItem);
+        blacklistItem.writeTo(out);
     }
 
     @Override

@@ -1,7 +1,10 @@
 package org.elasticsearch;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import org.elasticsearch.common.io.stream.StreamInput;
+import org.elasticsearch.common.io.stream.StreamOutput;
 
 public class BlacklistEntry {
     private final String query;
@@ -10,7 +13,6 @@ public class BlacklistEntry {
     private final LocalDateTime timestamp;
 
     private static final DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
-
     private static final long EXPIRATION_INTERVAL_HOURS = 6; // Entry expiration interval in minutes
 
     public BlacklistEntry(String query, String identifier, long executionTime, LocalDateTime timestamp) {
@@ -18,6 +20,13 @@ public class BlacklistEntry {
         this.identifier = identifier;
         this.executionTime = executionTime;
         this.timestamp = timestamp;
+    }
+
+    public BlacklistEntry(StreamInput in) throws IOException {
+        this.query = in.readString();
+        this.identifier = in.readString();
+        this.executionTime = in.readLong();
+        this.timestamp = LocalDateTime.parse(in.readString(), formatter);
     }
 
     public String getQuery() {
@@ -40,34 +49,10 @@ public class BlacklistEntry {
         return LocalDateTime.now().isAfter(timestamp.plusHours(EXPIRATION_INTERVAL_HOURS));
     }
 
-    @Override
-    public String toString() {
-        return query + "@" + identifier + "@" + executionTime + "@" + timestamp.format(formatter);
-    }
-
-    public static BlacklistEntry fromString(String str) {
-        String defaultQuery = "";
-        String defaultIdentifier = "";
-        long defaultExecutionTime = 0L;
-        LocalDateTime defaultTimestamp = LocalDateTime.MIN;
-
-        if (str == null || str.isEmpty()) {
-            return new BlacklistEntry(defaultQuery, defaultIdentifier, defaultExecutionTime, defaultTimestamp);
-        }
-
-        String[] parts = str.split("@");
-        if (parts.length != 4) {
-            return new BlacklistEntry(defaultQuery, defaultIdentifier, defaultExecutionTime, defaultTimestamp);
-        }
-
-        try {
-            String query = parts[0];
-            String identifier = parts[1];
-            long executionTime = Long.parseLong(parts[2]);
-            LocalDateTime timestamp = LocalDateTime.parse(parts[3], formatter);
-            return new BlacklistEntry(query, identifier, executionTime, timestamp);
-        } catch (Exception e) {
-            return new BlacklistEntry(defaultQuery, defaultIdentifier, defaultExecutionTime, defaultTimestamp);
-        }
+    public void writeTo(StreamOutput out) throws IOException {
+        out.writeString(query);
+        out.writeString(identifier);
+        out.writeLong(executionTime);
+        out.writeString(timestamp.format(formatter));
     }
 }

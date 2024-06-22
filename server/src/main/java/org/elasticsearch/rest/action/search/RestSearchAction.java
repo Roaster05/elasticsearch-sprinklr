@@ -8,6 +8,7 @@
 
 package org.elasticsearch.rest.action.search;
 
+import org.elasticsearch.Blacklist;
 import org.elasticsearch.BlacklistData;
 import org.elasticsearch.ElasticsearchBlacklistException;
 import org.elasticsearch.ElasticsearchException;
@@ -207,7 +208,7 @@ public class RestSearchAction extends BaseRestHandler {
             if(BlacklistData.getInstance().getLock())
             {
                 // Updating the blacklist without affecting the search response
-                String blacklistUpdate = BlacklistData.getInstance().convertBlacklistToString();
+                Blacklist blacklistUpdate = BlacklistData.getInstance().getBlacklist();
                 client.updateBlacklist(blacklistUpdate, new ActionListener<BlacklistUpdateResponse>() {
                     @Override
 

@@ -82,9 +82,9 @@ public class TransportBlacklistUpdateAction extends TransportMasterNodeAction<Bl
 
         ClusterState.Builder newStateBuilder = ClusterState.builder(state);
 
-        BlacklistData.getInstance().mergeAndConvertBlacklist(request.getBlacklistItem());
+        BlacklistData.getInstance().getBlacklist(request.getBlacklistItem());
 
-        newStateBuilder.clusterblacklist(BlacklistData.getInstance().convertBlacklistToString());
+        newStateBuilder.clusterblacklist(BlacklistData.getInstance().getBlacklist());
 
         ClusterState newClusterState = newStateBuilder.build();
 
@@ -99,7 +99,7 @@ public class TransportBlacklistUpdateAction extends TransportMasterNodeAction<Bl
                         reset = false;
                         BlacklistData.getInstance().resetStorage();
                     }
-                    return ClusterState.builder(currentState).clusterblacklist(BlacklistData.getInstance().convertBlacklistToString()).build();
+                    return ClusterState.builder(currentState).clusterblacklist(BlacklistData.getInstance().getBlacklist()).build();
                 }
 
                 @Override

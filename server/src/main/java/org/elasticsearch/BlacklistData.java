@@ -171,26 +171,5 @@ public class BlacklistData {
         blacklist.clear();
     }
 
-    public String convertBlacklistToString() {
-        // Before converting to string, ensure only valid (non-expired) entries are considered
-        blacklist.removeExpiredEntries();
-        return blacklist.toString();
-    }
 
-    /**
-     *
-     * @param newEntriesStr are the new entries which are being received from the newly applied cluster state and then this state is being
-     *                      applied to the node based cache which is our blacklist List, also the concurrency is being maintained which
-     *                      avoids any obvious reason of state corruption.
-     * @return
-     */
-    public String mergeAndConvertBlacklist(String newEntriesStr) {
-        Blacklist newEntries = Blacklist.fromString(newEntriesStr);
-        // Remove expired entries from the new blacklist
-        newEntries.removeExpiredEntries();
-        // Remove expired entries from the existing blacklist before merging
-        blacklist.removeExpiredEntries();
-        setBlacklist(getBlacklist(newEntries)); // Merge new entries with existing ones
-        return convertBlacklistToString();
-    }
 }

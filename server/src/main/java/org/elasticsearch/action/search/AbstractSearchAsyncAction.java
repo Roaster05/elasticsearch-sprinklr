@@ -663,21 +663,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
         String scrollId,
         String searchContextId
     ) {
-        int numSuccess = successfulOps.get();
-        int numFailures = failures.length;
-        assert numSuccess + numFailures == getNumShards()
-            : "numSuccess(" + numSuccess + ") + numFailures(" + numFailures + ") != totalShards(" + getNumShards() + ")";
-        return new SearchResponse(
-            internalSearchResponse,
-            scrollId,
-            getNumShards(),
-            numSuccess,
-            skippedOps.get(),
-            buildTookInMillis(),
-            failures,
-            clusters,
-            searchContextId
-        );
+        return buildSearchResponseNew(internalSearchResponse, failures, scrollId, searchContextId, null);
     }
 
     private SearchResponse buildSearchResponseNew(
@@ -687,8 +673,8 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
         String searchContextId,
         SearchRequest searchRequest
     ) {
-        String identifier=searchRequest.getIdentifier();
-        String query = searchRequest.getQuery();
+        String identifier = (searchRequest != null) ? searchRequest.getIdentifier() : null;
+        String query = (searchRequest != null) ? searchRequest.getQuery() : null;
         int numSuccess = successfulOps.get();
         int numFailures = failures.length;
         assert numSuccess + numFailures == getNumShards()
@@ -707,6 +693,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
             query
         );
     }
+
 
     boolean buildPointInTimeFromSearchResults() {
         return false;
