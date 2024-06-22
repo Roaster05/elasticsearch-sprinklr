@@ -11,7 +11,6 @@ package org.elasticsearch.cluster.service;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.elasticsearch.BlacklistData;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.cluster.ClusterChangedEvent;
 import org.elasticsearch.cluster.ClusterState;
@@ -515,7 +514,6 @@ public class ClusterApplierService extends AbstractLifecycleComponent implements
                 + newClusterState.nodes().getLocalNode();
 
         logger.debug("set locally applied cluster state to version {}", newClusterState.version());
-        BlacklistData.getInstance().getBlacklist(newClusterState.clusterblacklist());
         state.set(newClusterState);
 
         callClusterStateListeners(clusterChangedEvent, stopWatch);
