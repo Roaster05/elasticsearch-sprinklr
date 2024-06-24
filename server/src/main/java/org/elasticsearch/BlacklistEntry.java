@@ -13,7 +13,7 @@ public class BlacklistEntry {
     private final LocalDateTime timestamp;
 
     private static final DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
-    private static final long EXPIRATION_INTERVAL_HOURS = 6; // Entry expiration interval in minutes
+    private static final long EXPIRATION_INTERVAL_HOURS = 12; // Entry expiration interval in Hours
 
     public BlacklistEntry(String query, String identifier, long executionTime, LocalDateTime timestamp) {
         this.query = query;

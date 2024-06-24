@@ -363,6 +363,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         for (int i = 0; i < entries.size(); i++) {
             BlacklistEntry entry = entries.get(i);
             sb.append("{\n");
+            sb.append("  \"Query\": \"").append(entry.getQuery()).append("\",\n");
             sb.append("  \"Identifier\": \"").append(entry.getIdentifier()).append("\",\n");
             sb.append("  \"ExecutionTime\": ").append(entry.getExecutionTime()).append(",\n");
             sb.append("  \"Timestamp\": \"").append(entry.getTimestamp().format(DateTimeFormatter.ISO_DATE_TIME)).append("\"\n");

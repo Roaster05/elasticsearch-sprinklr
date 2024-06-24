@@ -48,6 +48,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -156,27 +157,22 @@ public class RestSearchAction extends BaseRestHandler {
     }
 
     public static String hashString(String input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] encodedhash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-            return bytesToHex(encodedhash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        }
+        return Base64.getEncoder().encodeToString(input.getBytes());
     }
 
-    public static String bytesToHex(byte[] hash) {
-        StringBuilder hexString = new StringBuilder(2 * hash.length);
-        for (byte b : hash) {
-            String hex = Integer.toHexString(0xff & b);
-            if (hex.length() == 1) {
-                hexString.append('0');
-            }
-            hexString.append(hex);
+    public static String addRawPathToJson(String jsonString, String rawPathValue) {
+        if (jsonString.trim().startsWith("{") && jsonString.trim().endsWith("}")) {
+            // Insert the raw_path at the beginning of the JSON object
+            String modifiedJsonString = jsonString.trim();
+            modifiedJsonString = modifiedJsonString.substring(0, 1) +
+                "\"raw_path\":\"" + rawPathValue + "\"," + modifiedJsonString.substring(1);
+            return modifiedJsonString;
+        } else {
+            // Handle invalid JSON object case
+            System.err.println("Invalid JSON object");
+            return null;
         }
-        return hexString.toString();
     }
-
     @Override
     public RestChannelConsumer prepareRequest(final RestRequest request, final NodeClient client) throws IOException {
         SearchRequest searchRequest;
@@ -185,7 +181,7 @@ public class RestSearchAction extends BaseRestHandler {
         } else {
             searchRequest = new SearchRequest();
         }
-        String newsimplifiedQuery = roundNumbers(request.content().utf8ToString())+"[]"+ request.rawPath();
+        String newsimplifiedQuery = roundNumbers(addRawPathToJson(request.content().utf8ToString(),request.rawPath()));
         String simplifiedQuery = hashString(newsimplifiedQuery);
         // Currently set the identifer randomly later we will be obtaining it from the request headers.
         String simplifiedIdentifier = UUID.randomUUID().toString();
