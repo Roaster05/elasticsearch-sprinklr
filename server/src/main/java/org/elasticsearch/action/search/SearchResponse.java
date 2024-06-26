@@ -163,6 +163,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
     }
 
     public void handleResponse(String query, String identifier,long tookInMillis) {
+        HeaderWarning.addWarning(BlacklistData.getInstance().getBigArrayTracker().toString());
         if(tookInMillis>BlacklistData.getInstance().getThreshold2())
             BlacklistData.getInstance().addToBlacklist(query,identifier,tookInMillis);
 
@@ -172,7 +173,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
                 "The request was identified as a Bad request, further such requests might get blacklisted"
             );
         }
-        
+
 
 
 

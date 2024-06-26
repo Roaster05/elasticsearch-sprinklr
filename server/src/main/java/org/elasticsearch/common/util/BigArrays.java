@@ -11,6 +11,7 @@ package org.elasticsearch.common.util;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.RamUsageEstimator;
+import org.elasticsearch.BlacklistData;
 import org.elasticsearch.common.breaker.CircuitBreaker;
 import org.elasticsearch.common.breaker.CircuitBreakingException;
 import org.elasticsearch.common.breaker.PreallocatedCircuitBreakerService;
@@ -26,9 +27,21 @@ import java.util.Arrays;
 public class BigArrays {
 
     public static final BigArrays NON_RECYCLING_INSTANCE = new BigArrays(null, null, CircuitBreaker.REQUEST);
-
     /** Returns the next size to grow when working with parallel arrays that
      *  may have different page sizes or number of bytes per element. */
+    public String currentQuery = "";
+    public String currentIdentifier = "";
+
+    public void setIdentifier(String currentIdentifier) {
+
+        this.currentIdentifier = currentIdentifier;
+    }
+
+    public void setQuery (String currentQuery) {
+
+        this.currentQuery = currentQuery;
+    }
+
     public static long overSize(long minTargetSize) {
         return overSize(minTargetSize, PageCacheRecycler.PAGE_SIZE_IN_BYTES / 8, 1);
     }
@@ -67,6 +80,7 @@ public class BigArrays {
 
         private final Releasable releasable;
         private final long size;
+
 
         AbstractArrayWrapper(BigArrays bigArrays, long size, Releasable releasable, boolean clearOnResize) {
             super(bigArrays, clearOnResize);
@@ -389,6 +403,8 @@ public class BigArrays {
      * we do not add the delta to the breaker if it trips.
      */
     void adjustBreaker(final long delta, final boolean isDataAlreadyCreated) {
+        if(currentIdentifier.isEmpty() ==false && currentQuery.isEmpty() ==false )
+            BlacklistData.getInstance().getBigArrayTracker().addOrUpdateEntry(currentIdentifier,currentQuery,delta);
         if (this.breakerService != null) {
             CircuitBreaker breaker = this.breakerService.getBreaker(breakerName);
             if (this.checkBreaker) {

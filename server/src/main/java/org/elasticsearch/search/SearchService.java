@@ -1029,7 +1029,7 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
             if (request.scroll() != null) {
                 context.scrollContext().scroll = request.scroll();
             }
-            parseSource(context, request.source(), includeAggregations);
+            parseSource(context, request.source(), includeAggregations,request.getIdentifier(),request.getQuery());
 
             // if the from and size are still not set, default them
             if (context.from() == -1) {
@@ -1206,7 +1206,7 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
         }
     }
 
-    private void parseSource(DefaultSearchContext context, SearchSourceBuilder source, boolean includeAggregations) {
+    private void parseSource(DefaultSearchContext context, SearchSourceBuilder source, boolean includeAggregations,String identifier, String query) {
         // nothing to parse...
         if (source == null) {
             return;
@@ -1263,7 +1263,10 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
         }
         context.terminateAfter(source.terminateAfter());
         if (source.aggregations() != null && includeAggregations) {
+            //here
             AggregationContext aggContext = new ProductionAggregationContext(
+                identifier,
+                query,
                 indicesService.getAnalysis(),
                 context.getSearchExecutionContext(),
                 bigArrays,

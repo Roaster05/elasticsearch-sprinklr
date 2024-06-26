@@ -341,6 +341,8 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
                     protected void executePhaseOnShard(
                         SearchShardIterator shardIt,
                         SearchShardTarget shard,
+                        String identifier,
+                        String query,
                         SearchActionListener<SearchPhaseResult> listener
                     ) {
                         final Transport.Connection connection = getConnection(shard.getClusterAlias(), shard.getNodeId());

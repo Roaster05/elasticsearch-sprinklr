@@ -11,6 +11,7 @@ package org.elasticsearch.indices.breaker;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.message.ParameterizedMessage;
+import org.elasticsearch.BlacklistData;
 import org.elasticsearch.common.breaker.ChildMemoryCircuitBreaker;
 import org.elasticsearch.common.breaker.CircuitBreaker;
 import org.elasticsearch.common.breaker.CircuitBreakingException;
@@ -21,6 +22,7 @@ import org.elasticsearch.common.settings.Setting.Property;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
+import org.elasticsearch.common.util.BigArrayTracker;
 import org.elasticsearch.common.util.concurrent.ReleasableLock;
 import org.elasticsearch.core.Booleans;
 import org.elasticsearch.core.TimeValue;
@@ -417,6 +419,9 @@ public class HierarchyCircuitBreakerService extends CircuitBreakerService {
         final MemoryUsage memoryUsed = memoryUsed(newBytesReserved);
         long parentLimit = this.parentSettings.getLimit();
         if (memoryUsed.totalUsage > parentLimit && overLimitStrategy.overLimit(memoryUsed).totalUsage > parentLimit) {
+            BigArrayTracker.RequestValue toBeBlacklisted =  BlacklistData.getInstance().getBigArrayTracker().removeEntryWithHighestMemory();
+            if(toBeBlacklisted!=null)
+                BlacklistData.getInstance().addToBlacklist(toBeBlacklisted.getQuery(),toBeBlacklisted.getIdentifier(),Integer.MAX_VALUE);
             this.parentTripCount.incrementAndGet();
             final String messageString = buildParentTripMessage(
                 newBytesReserved,

@@ -317,6 +317,7 @@ import org.elasticsearch.rest.action.admin.cluster.RestResetFeatureStateAction;
 import org.elasticsearch.rest.action.admin.cluster.RestRestoreSnapshotAction;
 import org.elasticsearch.rest.action.admin.cluster.RestSnapshotsStatusAction;
 import org.elasticsearch.rest.action.admin.cluster.RestSnapshottableFeaturesAction;
+import org.elasticsearch.rest.action.admin.cluster.RestUnblacklistIdentifierAction;
 import org.elasticsearch.rest.action.admin.cluster.RestVerifyRepositoryAction;
 import org.elasticsearch.rest.action.admin.cluster.dangling.RestDeleteDanglingIndexAction;
 import org.elasticsearch.rest.action.admin.cluster.dangling.RestImportDanglingIndexAction;
@@ -750,6 +751,7 @@ public class ActionModule extends AbstractModule {
         registerHandler.accept(new RestIndexPutAliasAction());
         registerHandler.accept(new RestIndicesAliasesAction());
         registerHandler.accept(new RestCreateIndexAction());
+        registerHandler.accept(new RestUnblacklistIdentifierAction());
         registerHandler.accept(new RestResizeHandler.RestShrinkIndexAction());
         registerHandler.accept(new RestResizeHandler.RestSplitIndexAction());
         registerHandler.accept(new RestResizeHandler.RestCloneIndexAction());

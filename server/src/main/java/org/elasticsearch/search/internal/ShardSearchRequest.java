@@ -79,6 +79,8 @@ public class ShardSearchRequest extends TransportRequest implements IndicesReque
     private final long nowInMillis;
     private final boolean allowPartialSearchResults;
     private final OriginalIndices originalIndices;
+    private String identifier;
+    private String query;
 
     private boolean canReturnNullResponseIfMatchNoDocs;
     private SearchSortValuesAndFormats bottomSortValues;
@@ -113,7 +115,9 @@ public class ShardSearchRequest extends TransportRequest implements IndicesReque
             nowInMillis,
             clusterAlias,
             null,
-            null
+            null,
+            "",
+            ""
         );
     }
 
@@ -128,7 +132,9 @@ public class ShardSearchRequest extends TransportRequest implements IndicesReque
         long nowInMillis,
         @Nullable String clusterAlias,
         ShardSearchContextId readerId,
-        TimeValue keepAlive
+        TimeValue keepAlive,
+        String identifier,
+        String query
     ) {
         this(
             originalIndices,
@@ -150,6 +156,8 @@ public class ShardSearchRequest extends TransportRequest implements IndicesReque
             computeWaitForCheckpoint(searchRequest.getWaitForCheckpoints(), shardId, shardRequestIndex),
             searchRequest.getWaitForCheckpointsTimeout()
         );
+        this.identifier = identifier;
+        this.query = query;
         // If allowPartialSearchResults is unset (ie null), the cluster-level default should have been substituted
         // at this stage. Any NPEs in the above are therefore an error in request preparation logic.
         assert searchRequest.allowPartialSearchResults() != null;
@@ -313,6 +321,10 @@ public class ShardSearchRequest extends TransportRequest implements IndicesReque
         this.waitForCheckpoint = clone.waitForCheckpoint;
         this.waitForCheckpointsTimeout = clone.waitForCheckpointsTimeout;
     }
+
+    public String getIdentifier() { return  this.identifier; }
+
+    public String getQuery() { return  this.query; }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {

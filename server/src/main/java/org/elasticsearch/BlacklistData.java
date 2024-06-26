@@ -1,6 +1,11 @@
 package org.elasticsearch;
 
+import org.elasticsearch.common.util.BigArrayTracker;
+
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -10,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 public class BlacklistData {
     private static BlacklistData instance;
     private Blacklist blacklist;
+    private BigArrayTracker bigArrayTracker;
     public long threshold1 = 3000;
     public long threshold2 = 1000;
     public boolean allowed = false;
@@ -29,6 +35,7 @@ public class BlacklistData {
 
     private BlacklistData() {
         blacklist = new Blacklist();
+        bigArrayTracker = new BigArrayTracker();
         scheduler = Executors.newScheduledThreadPool(1);
         startCleanupTask();
     }
@@ -78,6 +85,8 @@ public class BlacklistData {
     public Blacklist getBlacklist() {
         return blacklist;
     }
+
+    public BigArrayTracker getBigArrayTracker() { return this.bigArrayTracker; }
 
     public long getThreshold1() {
         return threshold1;
@@ -169,6 +178,21 @@ public class BlacklistData {
 
     public void resetStorage() {
         blacklist.clear();
+    }
+
+    public void deleteEntriesByIdentifiers(String[] identifiers) {
+        if (identifiers == null || identifiers.length == 0) {
+            resetStorage();
+            return;
+        }
+        List<String> identifiersToDelete = Arrays.asList(identifiers);
+        Iterator<BlacklistEntry> iterator = blacklist.getEntries().iterator();
+        while (iterator.hasNext()) {
+            BlacklistEntry entry = iterator.next();
+            if (identifiersToDelete.contains(entry.getIdentifier())) {
+                iterator.remove();
+            }
+        }
     }
 
 

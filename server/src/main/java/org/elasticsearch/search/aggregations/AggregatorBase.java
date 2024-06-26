@@ -318,6 +318,8 @@ public abstract class AggregatorBase extends Aggregator {
      * Used by all subclasses.
      */
     protected final BigArrays bigArrays() {
+        context.bigArrays().setQuery(context.getIdentifier());
+        context.bigArrays().setIdentifier(context.getQuery());;
         return context.bigArrays();
     }
 
