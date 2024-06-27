@@ -419,9 +419,12 @@ public class HierarchyCircuitBreakerService extends CircuitBreakerService {
         final MemoryUsage memoryUsed = memoryUsed(newBytesReserved);
         long parentLimit = this.parentSettings.getLimit();
         if (memoryUsed.totalUsage > parentLimit && overLimitStrategy.overLimit(memoryUsed).totalUsage > parentLimit) {
-            BigArrayTracker.RequestValue toBeBlacklisted =  BlacklistData.getInstance().getBigArrayTracker().removeEntryWithHighestMemory();
-            if(toBeBlacklisted!=null)
-                BlacklistData.getInstance().addToBlacklist(toBeBlacklisted.getQuery(),toBeBlacklisted.getIdentifier(),Integer.MAX_VALUE);
+            String boolBlacklisted="";
+            BigArrayTracker.RequestValue toBeBlacklisted = BlacklistData.getInstance().getBigArrayTracker().removeEntryWithHighestMemory();
+            if (toBeBlacklisted != null) {
+                boolBlacklisted = "[BLACKLIST]";
+                BlacklistData.getInstance().addToBlacklist(toBeBlacklisted.getQuery(), toBeBlacklisted.getIdentifier(), toBeBlacklisted.getUsedMemory()+Integer.MAX_VALUE);
+            }
             this.parentTripCount.incrementAndGet();
             final String messageString = buildParentTripMessage(
                 newBytesReserved,
@@ -437,7 +440,7 @@ public class HierarchyCircuitBreakerService extends CircuitBreakerService {
                 ? CircuitBreaker.Durability.TRANSIENT
                 : CircuitBreaker.Durability.PERMANENT;
             logger.debug(() -> new ParameterizedMessage("{}", messageString));
-            throw new CircuitBreakingException(messageString, memoryUsed.totalUsage, parentLimit, durability);
+            throw new CircuitBreakingException(messageString+boolBlacklisted, memoryUsed.totalUsage, parentLimit, durability);
         }
     }
 

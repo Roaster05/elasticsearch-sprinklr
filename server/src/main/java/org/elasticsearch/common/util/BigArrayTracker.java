@@ -1,7 +1,5 @@
 package org.elasticsearch.common.util;
 
-import org.elasticsearch.common.logging.HeaderWarning;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -23,8 +21,7 @@ public class BigArrayTracker {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             RequestKey that = (RequestKey) o;
-            return identifier.equals(that.identifier) &&
-                query.equals(that.query);
+            return identifier.equals(that.identifier) && query.equals(that.query);
         }
 
         @Override
@@ -46,7 +43,6 @@ public class BigArrayTracker {
         private final String query;
         private long usedMemory;
 
-        @SuppressWarnings("checkstyle:RedundantModifier")
         public RequestValue(String identifier, String query, long usedMemory) {
             this.identifier = identifier;
             this.query = query;
@@ -72,8 +68,8 @@ public class BigArrayTracker {
         @Override
         public String toString() {
             return "RequestValue{" +
-                "valuePart1='" + identifier + '\'' +
-                ", valuePart2='" + query + '\'' +
+                "identifier='" + identifier + '\'' +
+                ", query='" + query + '\'' +
                 ", usedMemory=" + usedMemory +
                 '}';
         }
@@ -81,35 +77,34 @@ public class BigArrayTracker {
 
     private final Map<RequestKey, RequestValue> trackerMap = new HashMap<>();
 
-    public void addOrUpdateEntry(String identifier, String query, long usedMemoryToAdd) {
-        HeaderWarning.addWarning(String.valueOf(usedMemoryToAdd));
+    public synchronized void addOrUpdateEntry(String identifier, String query, long usedMemoryToAdd) {
         RequestKey key = new RequestKey(identifier, query);
         RequestValue existingValue = trackerMap.get(key);
-
         if (existingValue != null) {
             existingValue.addUsedMemory(usedMemoryToAdd);
-            if (existingValue.getUsedMemory() == 0) {
+            if (existingValue.getUsedMemory() <=0 ) {
                 trackerMap.remove(key);
+
             }
         } else {
-            if (usedMemoryToAdd != 0) {
+            if(usedMemoryToAdd>0) {
                 RequestValue newValue = new RequestValue(identifier, query, usedMemoryToAdd);
                 trackerMap.put(key, newValue);
             }
         }
     }
 
-    public RequestValue removeEntry(String identifier, String query) {
+    public synchronized RequestValue removeEntry(String identifier, String query) {
         RequestKey key = new RequestKey(identifier, query);
         return trackerMap.remove(key);
     }
 
-    public RequestValue getEntry(String identifier, String query) {
+    public synchronized RequestValue getEntry(String identifier, String query) {
         RequestKey key = new RequestKey(identifier, query);
         return trackerMap.get(key);
     }
 
-    public RequestValue removeEntryWithHighestMemory() {
+    public synchronized RequestValue removeEntryWithHighestMemory() {
         if (trackerMap.isEmpty()) {
             return null;
         }

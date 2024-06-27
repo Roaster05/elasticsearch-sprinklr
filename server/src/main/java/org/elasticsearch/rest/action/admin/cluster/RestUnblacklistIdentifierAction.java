@@ -14,7 +14,6 @@ import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.admin.cluster.blacklist.BlacklistUpdateResponse;
 import org.elasticsearch.client.node.NodeClient;
 import org.elasticsearch.common.Strings;
-import org.elasticsearch.common.logging.DeprecationLogger;
 import org.elasticsearch.rest.BaseRestHandler;
 import org.elasticsearch.rest.BytesRestResponse;
 import org.elasticsearch.rest.RestRequest;
@@ -30,10 +29,6 @@ import static java.util.Collections.unmodifiableList;
 import static org.elasticsearch.rest.RestRequest.Method.POST;
 
 public class RestUnblacklistIdentifierAction extends BaseRestHandler {
-    private static final DeprecationLogger deprecationLogger = DeprecationLogger.getLogger(RestUnblacklistIdentifierAction.class);
-    public static final String TYPES_DEPRECATION_MESSAGE = "[types removal] Using include_type_name in create "
-        + "index requests is deprecated. The parameter will be removed in the next major version.";
-
 
     @Override
     public List<Route> routes() {
@@ -52,22 +47,25 @@ public class RestUnblacklistIdentifierAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(final RestRequest request, final NodeClient client) throws IOException {
-
         String[] identifiers = Strings.splitStringByCommaToArray(request.param("identifier"));
-        BlacklistData.getInstance().deleteEntriesByIdentifiers(identifiers);
+        List<String> successfulUnblacklist = BlacklistData.getInstance().deleteEntriesByIdentifiers(identifiers);
 
         return channel -> {
-            // Always update the blacklist
             Blacklist blacklistUpdate = BlacklistData.getInstance().getBlacklist();
             client.updateBlacklist(blacklistUpdate, new ActionListener<BlacklistUpdateResponse>() {
                 @Override
                 public void onResponse(BlacklistUpdateResponse blacklistUpdateResponse) {
                     try {
-                        // Build a success response using XContentBuilder
+                        // Build a response using XContentBuilder
                         XContentBuilder builder = XContentFactory.jsonBuilder();
                         builder.startObject();
                         builder.field("acknowledged", true);
-                        builder.field("message", "Blacklist updated successfully");
+                        if (successfulUnblacklist.isEmpty()) {
+                            builder.field("message", "No identifiers were unblacklisted because they were not found in the blacklist.");
+                        } else {
+                            builder.field("message", "Identifiers unblacklisted successfully.");
+                            builder.field("unblacklisted_identifiers", successfulUnblacklist);
+                        }
                         builder.endObject();
 
                         channel.sendResponse(new BytesRestResponse(RestStatus.OK, builder));
@@ -88,14 +86,10 @@ public class RestUnblacklistIdentifierAction extends BaseRestHandler {
 
                         channel.sendResponse(new BytesRestResponse(RestStatus.INTERNAL_SERVER_ERROR, builder));
                     } catch (IOException ioException) {
-                        // If there's an exception building the error response, log it or handle it
                         channel.sendResponse(new BytesRestResponse(RestStatus.INTERNAL_SERVER_ERROR, "Failed to update blacklist"));
                     }
                 }
             });
         };
-
     }
-
-
 }

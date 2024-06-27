@@ -47,9 +47,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -161,14 +163,16 @@ public class RestSearchAction extends BaseRestHandler {
     }
 
     public static String addRawPathToJson(String jsonString, String rawPathValue) {
+        if (jsonString == null || jsonString.trim().isEmpty()) {
+            jsonString = "{}";  // Initialize an empty JSON object if input is null or empty
+        }
         if (jsonString.trim().startsWith("{") && jsonString.trim().endsWith("}")) {
-            // Insert the raw_path at the beginning of the JSON object
             String modifiedJsonString = jsonString.trim();
             modifiedJsonString = modifiedJsonString.substring(0, 1) +
-                "\"raw_path\":\"" + rawPathValue + "\"," + modifiedJsonString.substring(1);
+                "\"raw_path\":\"" + rawPathValue + "\"," +
+                modifiedJsonString.substring(1);
             return modifiedJsonString;
         } else {
-            // Handle invalid JSON object case
             System.err.println("Invalid JSON object");
             return null;
         }
@@ -182,9 +186,10 @@ public class RestSearchAction extends BaseRestHandler {
             searchRequest = new SearchRequest();
         }
         String newsimplifiedQuery = roundNumbers(addRawPathToJson(request.content().utf8ToString(),request.rawPath()));
-        String simplifiedQuery = hashString(newsimplifiedQuery);
+        String simplifiedQuery = (newsimplifiedQuery);
         // Currently set the identifer randomly later we will be obtaining it from the request headers.
-        String simplifiedIdentifier = UUID.randomUUID().toString();
+        String simplifiedIdentifier = UUID.randomUUID().toString() + "_" + System.currentTimeMillis();
+
         if(BlacklistData.getInstance().getReset()==false)
             handleRequest(simplifiedQuery, simplifiedIdentifier);
         searchRequest.setIdentifier(simplifiedIdentifier);

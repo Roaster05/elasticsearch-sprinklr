@@ -50,6 +50,7 @@ import org.elasticsearch.xcontent.XContentBuilder;
 import java.io.IOException;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -365,7 +366,10 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             sb.append("{\n");
             sb.append("  \"Query\": \"").append(entry.getQuery()).append("\",\n");
             sb.append("  \"Identifier\": \"").append(entry.getIdentifier()).append("\",\n");
-            sb.append("  \"ExecutionTime\": ").append(entry.getExecutionTime()).append(",\n");
+            if(entry.getExecutionTime()>Integer.MAX_VALUE)
+                sb.append("  \"MemoryUsed\": ").append(entry.getExecutionTime()-Integer.MAX_VALUE).append(" bytes,\n");
+            else
+                sb.append("  \"ExecutionTime\": ").append(entry.getExecutionTime()).append(" ms,\n");
             sb.append("  \"Timestamp\": \"").append(entry.getTimestamp().format(DateTimeFormatter.ISO_DATE_TIME)).append("\"\n");
             sb.append("}");
 

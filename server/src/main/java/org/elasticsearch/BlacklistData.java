@@ -2,8 +2,13 @@ package org.elasticsearch;
 
 import org.elasticsearch.common.util.BigArrayTracker;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -134,9 +139,22 @@ public class BlacklistData {
     as they might get added while setting up these.
      */
     public void addToBlacklist(String query, String identifier, long tookInMillis) {
+        String[] parts = identifier.split("_");
         if (query != null && !query.contains("kibana") && !query.contains("migration")) {
             lock = true;
-            blacklist.addEntry(new BlacklistEntry(query, identifier, tookInMillis, LocalDateTime.now()));
+            blacklist.addEntry(new BlacklistEntry(query, parts[0], tookInMillis, convertMillisToLocalDateTime(Long.parseLong(parts[1]))));
+        }
+    }
+
+    private static LocalDateTime convertMillisToLocalDateTime(long timestampMillis) {
+        try {
+            // Convert milliseconds to Instant and then to LocalDateTime
+            Instant instant = Instant.ofEpochMilli(timestampMillis);
+            return LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+        } catch (Exception e) {
+            // Handle conversion exception
+            e.printStackTrace();
+            return null;
         }
     }
 
@@ -148,6 +166,8 @@ public class BlacklistData {
     Here the return value is accessed to determine the reason of blacklisting to be displayed.
      */
     public int shouldAllowRequest(String query, String identifier) {
+        String[] parts = identifier.split("_");
+        identifier = parts[0];
         if (!allowed) {
             return 0;
         }
@@ -180,20 +200,24 @@ public class BlacklistData {
         blacklist.clear();
     }
 
-    public void deleteEntriesByIdentifiers(String[] identifiers) {
+    public List<String> deleteEntriesByIdentifiers(String[] identifiers) {
         if (identifiers == null || identifiers.length == 0) {
             resetStorage();
-            return;
+            return Collections.emptyList();
         }
+
         List<String> identifiersToDelete = Arrays.asList(identifiers);
+        List<String> successfulUnblacklist = new ArrayList<>();
+
         Iterator<BlacklistEntry> iterator = blacklist.getEntries().iterator();
         while (iterator.hasNext()) {
             BlacklistEntry entry = iterator.next();
             if (identifiersToDelete.contains(entry.getIdentifier())) {
                 iterator.remove();
+                successfulUnblacklist.add(entry.getIdentifier());
             }
         }
+
+        return successfulUnblacklist;
     }
-
-
 }
