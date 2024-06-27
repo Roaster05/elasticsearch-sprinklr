@@ -139,10 +139,9 @@ public class BlacklistData {
     as they might get added while setting up these.
      */
     public void addToBlacklist(String query, String identifier, long tookInMillis) {
-        String[] parts = identifier.split("_");
         if (query != null && !query.contains("kibana") && !query.contains("migration")) {
             lock = true;
-            blacklist.addEntry(new BlacklistEntry(query, parts[0], tookInMillis, convertMillisToLocalDateTime(Long.parseLong(parts[1]))));
+            blacklist.addEntry(new BlacklistEntry(query, identifier, tookInMillis, LocalDateTime.now()));
         }
     }
 
@@ -166,8 +165,6 @@ public class BlacklistData {
     Here the return value is accessed to determine the reason of blacklisting to be displayed.
      */
     public int shouldAllowRequest(String query, String identifier) {
-        String[] parts = identifier.split("_");
-        identifier = parts[0];
         if (!allowed) {
             return 0;
         }
@@ -175,18 +172,14 @@ public class BlacklistData {
 
         for (BlacklistEntry entry : blacklist.getEntries()) {
             if (Objects.equals(entry.getIdentifier(), identifier)) {
-                if (entry.getExecutionTime() > threshold1) {
-                    identifierScore += 1.5;
-                } else if (entry.getExecutionTime() > threshold2) {
-                    identifierScore += 1.0;
-                }
+                identifierScore+=1.0;
             }
         }
         if (identifierScore >= 50) {
             return 2;
         }
         long queryCount = blacklist.getEntries().stream()
-            .filter(entry -> Objects.equals(entry.getQuery(), query) && entry.getExecutionTime() > threshold1)
+            .filter(entry -> Objects.equals(entry.getQuery(), query))
             .count();
 
         if (queryCount >= 15) {

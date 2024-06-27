@@ -257,6 +257,8 @@ public class ShardSearchRequest extends TransportRequest implements IndicesReque
         nowInMillis = in.readVLong();
         requestCache = in.readOptionalBoolean();
         clusterAlias = in.readOptionalString();
+        query = in.readOptionalString();
+        identifier = in.readOptionalString();
         if (in.getVersion().onOrAfter(Version.V_7_0_0)) {
             allowPartialSearchResults = in.readBoolean();
         } else if (in.getVersion().onOrAfter(Version.V_6_3_0)) {
@@ -352,6 +354,8 @@ public class ShardSearchRequest extends TransportRequest implements IndicesReque
         }
         out.writeOptionalBoolean(requestCache);
         out.writeOptionalString(clusterAlias);
+        out.writeOptionalString(query);
+        out.writeOptionalString(identifier);
         if (out.getVersion().onOrAfter(Version.V_7_0_0)) {
             out.writeBoolean(allowPartialSearchResults);
         } else if (out.getVersion().onOrAfter(Version.V_6_3_0)) {

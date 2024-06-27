@@ -163,19 +163,18 @@ public class RestSearchAction extends BaseRestHandler {
     }
 
     public static String addRawPathToJson(String jsonString, String rawPathValue) {
-        if (jsonString == null || jsonString.trim().isEmpty()) {
-            jsonString = "{}";  // Initialize an empty JSON object if input is null or empty
-        }
         if (jsonString.trim().startsWith("{") && jsonString.trim().endsWith("}")) {
+            // Insert the raw_path at the beginning of the JSON object
             String modifiedJsonString = jsonString.trim();
             modifiedJsonString = modifiedJsonString.substring(0, 1) +
-                "\"raw_path\":\"" + rawPathValue + "\"," +
-                modifiedJsonString.substring(1);
+                "\"raw_path\":\"" + rawPathValue + "\"," + modifiedJsonString.substring(1);
             return modifiedJsonString;
         } else {
+            // Handle invalid JSON object case
             System.err.println("Invalid JSON object");
             return null;
         }
+
     }
     @Override
     public RestChannelConsumer prepareRequest(final RestRequest request, final NodeClient client) throws IOException {
@@ -188,7 +187,7 @@ public class RestSearchAction extends BaseRestHandler {
         String newsimplifiedQuery = roundNumbers(addRawPathToJson(request.content().utf8ToString(),request.rawPath()));
         String simplifiedQuery = (newsimplifiedQuery);
         // Currently set the identifer randomly later we will be obtaining it from the request headers.
-        String simplifiedIdentifier = UUID.randomUUID().toString() + "_" + System.currentTimeMillis();
+        String simplifiedIdentifier = UUID.randomUUID().toString();
 
         if(BlacklistData.getInstance().getReset()==false)
             handleRequest(simplifiedQuery, simplifiedIdentifier);

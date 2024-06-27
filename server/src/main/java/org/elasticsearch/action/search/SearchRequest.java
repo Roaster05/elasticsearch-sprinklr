@@ -255,6 +255,8 @@ public class SearchRequest extends ActionRequest implements IndicesRequest.Repla
         searchType = SearchType.fromId(in.readByte());
         indices = in.readStringArray();
         routing = in.readOptionalString();
+        query = in.readOptionalString();
+        identifier = in.readOptionalString();
         preference = in.readOptionalString();
         scroll = in.readOptionalWriteable(Scroll::new);
         source = in.readOptionalWriteable(SearchSourceBuilder::new);
@@ -307,6 +309,8 @@ public class SearchRequest extends ActionRequest implements IndicesRequest.Repla
         out.writeByte(searchType.id());
         out.writeStringArray(indices);
         out.writeOptionalString(routing);
+        out.writeOptionalString(query);
+        out.writeOptionalString(identifier);
         out.writeOptionalString(preference);
         out.writeOptionalWriteable(scroll);
         out.writeOptionalWriteable(source);
@@ -895,6 +899,8 @@ public class SearchRequest extends ActionRequest implements IndicesRequest.Repla
         return searchType == that.searchType
             && Arrays.equals(indices, that.indices)
             && Objects.equals(routing, that.routing)
+            && Objects.equals(query, that.query)
+            && Objects.equals(identifier,that.identifier)
             && Objects.equals(preference, that.preference)
             && Objects.equals(source, that.source)
             && Objects.equals(requestCache, that.requestCache)
@@ -918,6 +924,8 @@ public class SearchRequest extends ActionRequest implements IndicesRequest.Repla
             searchType,
             Arrays.hashCode(indices),
             routing,
+            query,
+            identifier,
             preference,
             source,
             requestCache,
@@ -949,6 +957,12 @@ public class SearchRequest extends ActionRequest implements IndicesRequest.Repla
             + Arrays.toString(types)
             + ", routing='"
             + routing
+            + '\''
+            + ", query='"
+            + query
+            + '\''
+            + ", identifier='"
+            + identifier
             + '\''
             + ", preference='"
             + preference
