@@ -11,6 +11,7 @@ public class BlacklistEntry {
     private final String identifier;
     private final long executionTime;
     private final LocalDateTime timestamp;
+    private final String node;
 
     private static final DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
     private static final long EXPIRATION_INTERVAL_HOURS = 12; // Entry expiration interval in Hours
@@ -20,6 +21,7 @@ public class BlacklistEntry {
         this.identifier = identifier;
         this.executionTime = executionTime;
         this.timestamp = timestamp;
+        this.node = BlacklistData.getInstance().getnode();
     }
 
     public BlacklistEntry(StreamInput in) throws IOException {
@@ -27,11 +29,14 @@ public class BlacklistEntry {
         this.identifier = in.readString();
         this.executionTime = in.readLong();
         this.timestamp = LocalDateTime.parse(in.readString(), formatter);
+        this.node = in.readString();
     }
 
     public String getQuery() {
         return query;
     }
+
+    public String getNode() { return node; }
 
     public String getIdentifier() {
         return identifier;
@@ -54,5 +59,6 @@ public class BlacklistEntry {
         out.writeString(identifier);
         out.writeLong(executionTime);
         out.writeString(timestamp.format(formatter));
+        out.writeString(node);
     }
 }

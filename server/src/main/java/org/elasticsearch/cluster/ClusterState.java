@@ -371,6 +371,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             else
                 sb.append("  \"ExecutionTime\": ").append(entry.getExecutionTime()).append(" ms,\n");
             sb.append("  \"Timestamp\": \"").append(entry.getTimestamp().format(DateTimeFormatter.ISO_DATE_TIME)).append("\"\n");
+            sb.append("  \"Node\": \"").append(entry.getNode()).append("\"\n");
             sb.append("}");
 
             if (i < entries.size() - 1) {

@@ -182,7 +182,7 @@ public class BlacklistData {
             .filter(entry -> Objects.equals(entry.getQuery(), query))
             .count();
 
-        if (queryCount >= 15) {
+        if (queryCount >= 5) {
             return 1;
         } else {
             return 0;
