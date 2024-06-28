@@ -176,6 +176,20 @@ public class RestSearchAction extends BaseRestHandler {
         } else {
             searchRequest = new SearchRequest();
         }
+
+        /*
+         * We have to pull out the call to `source().size(size)` because
+         * _update_by_query and _delete_by_query uses this same parsing
+         * path but sets a different variable when it sees the `size`
+         * url parameter.
+         *
+         * Note that we can't use `searchRequest.source()::size` because
+         * `searchRequest.source()` is null right now. We don't have to
+         * guard against it being null in the IntConsumer because it can't
+         * be null later. If that is confusing to you then you are in good
+         * company.
+         */
+
         String newsimplifiedQuery = roundNumbers(addRawPathToJson(request.content().utf8ToString(),request.rawPath()));
         String simplifiedQuery = (newsimplifiedQuery);
         // Currently set the identifer randomly later we will be obtaining it from the request headers.

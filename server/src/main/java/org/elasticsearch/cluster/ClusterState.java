@@ -49,8 +49,6 @@ import org.elasticsearch.xcontent.XContentBuilder;
 
 import java.io.IOException;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Base64;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -60,6 +58,9 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.elasticsearch.cluster.coordination.Coordinator.ZEN1_BWC_TERM;
+
+
+
 
 /**
  * Represents the current state of the cluster.
@@ -354,7 +355,19 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         return routingNodes;
     }
 
-
+    /**
+     * Formats the given cluster blacklist into a JSON-like string representation.
+     *
+     * This method iterates through the entries of the provided {@link Blacklist} object and constructs
+     * a formatted string containing details about each entry. Each entry includes the query, identifier,
+     * execution time (or memory used if applicable), timestamp, and node.
+     *
+     * If the execution time of an entry exceeds {@code Integer.MAX_VALUE}, it is considered as memory used
+     * and adjusted accordingly.
+     *
+     * @param clusterblacklist The {@link Blacklist} containing the entries to be formatted.
+     * @return A string representing the formatted cluster blacklist in a JSON-like structure.
+     */
     public static String formatClusterBlacklist(Blacklist clusterblacklist) {
         List<BlacklistEntry> entries = clusterblacklist.getEntries();
 
@@ -538,6 +551,19 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             builder.field("master_node", nodes().getMasterNodeId());
         }
 
+        /**
+         * Checks if the metrics contain {@link Metric#CLUSTERBLACKLIST} and, if so, adds the formatted cluster blacklist
+         * to the provided {@link XContentBuilder}.
+         *
+         * This method ensures that the cluster blacklist is included in the response if the relevant metric is requested.
+         * The cluster blacklist can be obtained through an API call to <code>_cluster/state/clusterblacklist</code>, which
+         * can be used for implementing a visualization tool for blacklisted queries, among other purposes.
+         *
+         * @param metrics The set of metrics to check.
+         * @param builder The {@link XContentBuilder} used to build the response.
+         * @param clusterblacklist The {@link Blacklist} containing the cluster blacklist entries to be formatted.
+         * @throws IOException If an I/O error occurs while adding the field to the builder.
+         */
         if(metrics.contains(Metric.CLUSTERBLACKLIST)) {
 
             builder.field("cluster_blacklist",formatClusterBlacklist(clusterblacklist));
