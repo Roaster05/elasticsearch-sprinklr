@@ -7,6 +7,10 @@ import java.util.List;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 
+/**
+ * The `Blacklist` class serves as a storage mechanism for blacklisted queries, represented as `BlacklistEntry` objects.
+ * It manages both local and cluster-level blacklist storage.
+ */
 public class Blacklist {
     private List<BlacklistEntry> entries;
 
@@ -31,8 +35,10 @@ public class Blacklist {
     }
 
     /**
-     * removes the entries from the list if their status is been changes to expired , we can break as the entries will be
-     * in ordering of their timestamp
+     * Removes entries from the list if their status has changed to expired.
+     * Since entries are ordered by their timestamp, we can break the loop
+     * once we encounter a non-expired entry, ensuring that subsequent queries
+     * will persist in the storage.
      */
     public void removeExpiredEntries() {
         Iterator<BlacklistEntry> iterator = entries.iterator();

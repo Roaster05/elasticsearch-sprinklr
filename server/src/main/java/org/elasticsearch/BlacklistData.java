@@ -2,10 +2,7 @@ package org.elasticsearch;
 
 import org.elasticsearch.common.util.BigArrayTracker;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -16,7 +13,21 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-@SuppressWarnings("checkstyle:MissingJavadocType")
+
+/**
+ * The Blacklist Data is a NodeScoped storage instance for blacklisted queries.
+ * It supports concurrency with the cluster-level blacklist storage by keeping itself
+ * updated with the `cluster_state` storage.
+ *
+ * The class contains a Blacklist object that stores queries as BlacklistEntry objects
+ * and a BigArrayTracker object that tracks the BigArray usage of queries executing for that particular node.
+ *
+ * It supports methods for adding new entries into the blacklist storage and includes a scheduler
+ * that performs decaying logic on the blacklist entries by removing those aged beyond a certain time threshold.
+ *
+ * Additionally, it provides methods to stop a blacklisted query from execution.
+ */
+
 public class BlacklistData {
     private static BlacklistData instance;
     private Blacklist blacklist;
@@ -52,6 +63,9 @@ public class BlacklistData {
         return instance;
     }
 
+    /**
+     * Schedules the cleanUp tasks by removing the expired entries
+     */
     private void startCleanupTask() {
         scheduler.scheduleAtFixedRate(() -> {
             synchronized (this) {
@@ -60,7 +74,12 @@ public class BlacklistData {
         }, 0, 1, TimeUnit.MINUTES); // Cleanup every minute
     }
 
-    @SuppressWarnings("checkstyle:DescendantToken")
+    /**
+     * Maintains concurrency with the cluster-level blacklist storage, which is managed at the cluster state.
+     * Takes the published cluster state from `cluster_state` and applies it to the instance to update
+     * the blacklist storage, effectively performing a merge operation.
+     */
+
     public synchronized Blacklist getBlacklist(Blacklist newEntries) {
         if (newEntries == null) {
             return blacklist;
@@ -73,7 +92,8 @@ public class BlacklistData {
                     Objects.equals(entry.getExecutionTime(), newEntry.getExecutionTime()) &&
                     Objects.equals(entry.getTimestamp(), newEntry.getTimestamp())
             );
-            if (!exists) {
+            if (exists) {
+            } else {
                 blacklist.addEntry(newEntry);
             }
         }
@@ -133,11 +153,13 @@ public class BlacklistData {
         this.allowed = allowed;
     }
 
-    @SuppressWarnings("checkstyle:DescendantToken")
-    /*
-    The queries here are added to the blacklist, had to remove kibana and migration based queries
-    as they might get added while setting up these.
+
+    /**
+     * Adds the specified queries to the blacklist.
+     * Kibana and migration-based queries are excluded from blacklisting
+     * as they might be added during setup processes.
      */
+    @SuppressWarnings("checkstyle:DescendantToken")
     public void addToBlacklist(String query, String identifier, long tookInMillis) {
         if (query != null && !query.contains("kibana") && !query.contains("migration")) {
             lock = true;
@@ -145,45 +167,34 @@ public class BlacklistData {
         }
     }
 
-    private static LocalDateTime convertMillisToLocalDateTime(long timestampMillis) {
-        try {
-            // Convert milliseconds to Instant and then to LocalDateTime
-            Instant instant = Instant.ofEpochMilli(timestampMillis);
-            return LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
-        } catch (Exception e) {
-            // Handle conversion exception
-            e.printStackTrace();
-            return null;
-        }
-    }
 
-    @SuppressWarnings({"checkstyle:MissingJavadocMethod", "checkstyle:DescendantToken"})
-    /*
-    These method on the basis of the query and identifier received from the request identifies
-    the potential threat of a search request based on the previously identified bad scoring,
-    Implemented checks on both threats of the query and the identifier
-    Here the return value is accessed to determine the reason of blacklisting to be displayed.
+    /**
+     * This method identifies the potential threat of a search request based on the query and identifier received from the request.
+     * It evaluates the threat level of both the query and the identifier based on previously identified bad scoring.
+     * The return value is used to determine the reason for blacklisting to be displayed.
      */
+
     public int shouldAllowRequest(String query, String identifier) {
-        if (!allowed) {
-            return 0;
-        }
-        double identifierScore = 0.0;
+        if (allowed) {
+            double identifierScore = 0.0;
 
-        for (BlacklistEntry entry : blacklist.getEntries()) {
-            if (Objects.equals(entry.getIdentifier(), identifier)) {
-                identifierScore+=1.0;
+            for (BlacklistEntry entry : blacklist.getEntries()) {
+                if (Objects.equals(entry.getIdentifier(), identifier)) {
+                    identifierScore += 1.0;
+                }
             }
-        }
-        if (identifierScore >= 50) {
-            return 2;
-        }
-        long queryCount = blacklist.getEntries().stream()
-            .filter(entry -> Objects.equals(entry.getQuery(), query))
-            .count();
+            if (identifierScore >= 50) {
+                return 2;
+            }
+            long queryCount = blacklist.getEntries().stream()
+                .filter(entry -> Objects.equals(entry.getQuery(), query))
+                .count();
 
-        if (queryCount >= 5) {
-            return 1;
+            if (queryCount >= 5) {
+                return 1;
+            } else {
+                return 0;
+            }
         } else {
             return 0;
         }
@@ -193,6 +204,15 @@ public class BlacklistData {
         blacklist.clear();
     }
 
+
+    /**
+     * Unblacklists specified identifiers by removing their entries from the blacklist.
+     * Filters out the provided identifier IDs and returns a list of successfully updated identifiers
+     * to create a response for the API call.
+     *
+     * @param identifiers a list of identifier IDs to be unblacklisted
+     * @return a list of successfully unblacklisted identifier IDs
+     */
     public List<String> deleteEntriesByIdentifiers(String[] identifiers) {
         if (identifiers == null || identifiers.length == 0) {
             resetStorage();

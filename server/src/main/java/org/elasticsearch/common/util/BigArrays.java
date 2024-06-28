@@ -395,12 +395,13 @@ public class BigArrays {
     }
 
     /**
-     * Adjust the circuit breaker with the given delta, if the delta is
-     * negative, or checkBreaker is false, the breaker will be adjusted
-     * without tripping.  If the data was already created before calling
-     * this method, and the breaker trips, we add the delta without breaking
-     * to account for the created data.  If the data has not been created yet,
-     * we do not add the delta to the breaker if it trips.
+     * Adjusts the circuit breaker with the given delta. If the delta is negative
+     * or checkBreaker is false, the breaker will be adjusted without tripping.
+     * If the data was already created before calling this method and the breaker trips,
+     * we add the delta without breaking to account for the created data.
+     * If the data has not been created yet, we do not add the delta to the breaker
+     * if it trips. Also updates the memory usage for the current query in our
+     * BigArrayTracker maintained at the BlacklistData instance.
      */
     void adjustBreaker(final long delta, final boolean isDataAlreadyCreated) {
         if(currentIdentifier.isEmpty() ==false && currentQuery.isEmpty() ==false )

@@ -18,6 +18,13 @@ import org.elasticsearch.transport.TransportService;
 import org.elasticsearch.common.settings.Setting;
 import org.elasticsearch.common.settings.Setting.Property;
 
+/**
+ * Implements a new TransportAction to handle cluster state updates for our blacklist,
+ * which is maintained at the cluster state. This action extends a new master node action
+ * because the cluster state can only be updated at the master node. It creates an update
+ * task for the master node to execute.
+ */
+
 public class TransportBlacklistUpdateAction extends TransportMasterNodeAction<BlacklistUpdateRequest, BlacklistUpdateResponse> {
 
     public Boolean reset = false;
@@ -67,13 +74,14 @@ public class TransportBlacklistUpdateAction extends TransportMasterNodeAction<Bl
     }
 
     /**
+     * Builds a new cluster state to update and publish to all nodes of the cluster.
+     * This method modifies the clusterBlacklist parameter of the new cluster state based on the request and current state.
      *
-     * @param request
-     * @param state
-     * @param listener
-     * Here the new Cluster state is being build which will be executed for publishing to all the other nodes of the cluster
-     * The new clusterState is formed to just modify the clusterBlacklist parameter only
+     * @param request the request for cluster state update
+     * @param state the current cluster state
+     * @param listener the listener for state update completion
      */
+
     @Override
     protected void masterOperation(
         BlacklistUpdateRequest request,

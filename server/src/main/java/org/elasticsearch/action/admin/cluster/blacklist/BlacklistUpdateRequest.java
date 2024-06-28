@@ -10,6 +10,15 @@ import org.elasticsearch.core.TimeValue;
 
 import java.io.IOException;
 
+
+/**
+ * Represents a request to update the blacklist in the cluster. Extends {@link MasterNodeRequest}
+ * and implements {@link AckedRequest}.
+ *
+ * <p>The request includes a {@link Blacklist} item to be updated.
+ *
+ * <p>Provides methods for serialization and deserialization from streams.
+ */
 public class BlacklistUpdateRequest extends MasterNodeRequest<BlacklistUpdateRequest> implements AckedRequest {
 
     private Blacklist blacklistItem;

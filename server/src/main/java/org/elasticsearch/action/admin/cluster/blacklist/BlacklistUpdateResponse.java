@@ -10,6 +10,15 @@ import org.elasticsearch.xcontent.XContentBuilder;
 
 import java.io.IOException;
 
+
+/**
+ * Represents a response for updating the blacklist in the cluster. Extends {@link ActionResponse}
+ * and implements {@link StatusToXContentObject}.
+ *
+ * <p>The response includes whether the update was acknowledged by the cluster.
+ *
+ * <p>Provides methods to serialize and deserialize from streams, and to generate XContent for REST responses.
+ */
 public class BlacklistUpdateResponse extends ActionResponse implements StatusToXContentObject{
 
     private boolean acknowledged;

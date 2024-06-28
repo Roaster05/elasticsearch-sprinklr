@@ -28,8 +28,18 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.unmodifiableList;
 import static org.elasticsearch.rest.RestRequest.Method.POST;
 
+/**
+ * REST action handler for unblacklisting identifiers. Provides API endpoints to
+ * unblacklist specific or all identifiers from the blacklist and synchronizes
+ * the changes with the cluster-level blacklist state using {@link org.elasticsearch.action.admin.cluster.blacklist.BlacklistUpdateAction}.
+ */
 public class RestUnblacklistIdentifierAction extends BaseRestHandler {
 
+    /**
+     * Defines the routes for unblacklist API endpoints.
+     *
+     * @return List of routes supported by this action.
+     */
     @Override
     public List<Route> routes() {
         return unmodifiableList(
@@ -40,11 +50,24 @@ public class RestUnblacklistIdentifierAction extends BaseRestHandler {
         );
     }
 
+    /**
+     * Retrieves the name of this REST action.
+     *
+     * @return Name of the REST action.
+     */
     @Override
     public String getName() {
         return "unblacklist_action";
     }
 
+    /**
+     * Prepares the request for unblacklisting identifiers and handles the response.
+     *
+     * @param request The REST request object.
+     * @param client The Elasticsearch node client.
+     * @return A consumer function for handling the REST channel response.
+     * @throws IOException If an I/O exception occurs.
+     */
     @Override
     public RestChannelConsumer prepareRequest(final RestRequest request, final NodeClient client) throws IOException {
         String[] identifiers = Strings.splitStringByCommaToArray(request.param("identifier"));
@@ -56,11 +79,11 @@ public class RestUnblacklistIdentifierAction extends BaseRestHandler {
                 @Override
                 public void onResponse(BlacklistUpdateResponse blacklistUpdateResponse) {
                     try {
-                        // Build a response using XContentBuilder
+                        // Build a success response using XContentBuilder
                         XContentBuilder builder = XContentFactory.jsonBuilder();
                         builder.startObject();
                         builder.field("acknowledged", true);
-                        if (successfulUnblacklist.isEmpty()) {
+                        if (successfulUnblacklist.isEmpty() && identifiers.length!=0) {
                             builder.field("message", "No identifiers were unblacklisted because they were not found in the blacklist.");
                         } else {
                             builder.field("message", "Identifiers unblacklisted successfully.");

@@ -6,6 +6,11 @@ import java.time.format.DateTimeFormatter;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 
+/**
+ * BlacklistEntry represents a blacklisted query. It stores the query, the identifier
+ * that triggered it, the execution time/memory used by the query, the timestamp of its
+ * blacklisting, and the node where it was blacklisted.
+ */
 public class BlacklistEntry {
     private final String query;
     private final String identifier;

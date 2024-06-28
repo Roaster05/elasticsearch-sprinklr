@@ -44,14 +44,8 @@ import org.elasticsearch.search.suggest.term.TermSuggestionBuilder.SuggestMode;
 import org.elasticsearch.xcontent.XContentParser;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.text.SimpleDateFormat;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -137,14 +131,13 @@ public class RestSearchAction extends BaseRestHandler {
     }
 
     /**
+     * Handles the request by accessing the cache containing bad queries and bypasses the query if it looks like a potential bad request.
+     * The reason for bypassing the request is also mentioned, whether it is query-based or identifier-based, based on the response
+     * received.
      *
-     * @param query
-     * @param identifier
-     * @throws ElasticsearchException
-     *
-     * This function basically handles the request by accessing the cache which contains bad queries and bypasses the query if it
-     * looks like a potential bad request , also the reason for bypassing the request is also mentioned whether the reason is query based
-     * or identifier based on the response received.
+     * @param query The query string to be checked.
+     * @param identifier The identifier associated with the query.
+     * @throws ElasticsearchException if there is an issue handling the request.
      */
     public void handleRequest(String query, String identifier) throws ElasticsearchException {
         int ex = BlacklistData.getInstance().shouldAllowRequest(query, identifier);
@@ -152,15 +145,14 @@ public class RestSearchAction extends BaseRestHandler {
         if (ex==0) {
             return;
         } else if(ex==1)  {
-            throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: " + identifier+"as this query has been blacklisted");
+            throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: "
+                + identifier+"as this query has been blacklisted");
         }
         else
-            throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: " + identifier+"as this identifier has been blacklisted");
+            throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: "
+                + identifier+"as this identifier has been blacklisted");
     }
 
-    public static String hashString(String input) {
-        return Base64.getEncoder().encodeToString(input.getBytes());
-    }
 
     public static String addRawPathToJson(String jsonString, String rawPathValue) {
         if (jsonString.trim().startsWith("{") && jsonString.trim().endsWith("}")) {
@@ -202,8 +194,11 @@ public class RestSearchAction extends BaseRestHandler {
             cancelClient.execute(SearchAction.INSTANCE, searchRequest, new RestStatusToXContentListener<>(channel));
 
             /**
-             * Pushing a Blacklist Update Action only if the lock is being set as true means there is a need to sync
-             * the local storage with the global cache as our cache is ahead of it so had to commit a new state.
+             * Pushes a Blacklist Update Action only if the lock is set to true, indicating a need to sync
+             * the local storage with the global cache. This is necessary when the local cache is ahead,
+             * requiring a new state to be committed.
+             *
+             * @param lock The lock indicating whether synchronization is needed.
              */
             if(BlacklistData.getInstance().getLock())
             {

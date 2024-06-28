@@ -113,7 +113,8 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         ShardSearchFailure[] shardFailures,
         Clusters clusters
     ) {
-        this(internalResponse, scrollId, totalShards, successfulShards, skippedShards, tookInMillis, shardFailures, clusters, null,null,null);
+        this(internalResponse, scrollId, totalShards, successfulShards, skippedShards, tookInMillis, shardFailures, clusters,
+            null, null , null );
     }
 
     public SearchResponse(
@@ -127,7 +128,8 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         Clusters clusters,
         String pointInTimeId
     ) {
-        this(internalResponse, scrollId, totalShards, successfulShards, skippedShards, tookInMillis, shardFailures, clusters, pointInTimeId, null,null);
+        this(internalResponse, scrollId, totalShards, successfulShards, skippedShards, tookInMillis, shardFailures, clusters, pointInTimeId,
+            null , null );
     }
 
 
@@ -162,20 +164,28 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
             : "SearchResponse can't have both scrollId [" + scrollId + "] and searchContextId [" + pointInTimeId + "]";
     }
 
-    public void handleResponse(String query, String identifier,long tookInMillis) {
+    /**
+     * Checks whether the execution time of the current query exceeds a threshold and decides
+     * whether to add the query to the local blacklist storage instance of BlacklistData.
+     *
+     * @param query the query string
+     * @param identifier the identifier associated with the query
+     * @param tookInMillis the execution time of the query in milliseconds
+     */
+    public void handleResponse(String query, String identifier, long tookInMillis) {
         HeaderWarning.addWarning(BlacklistData.getInstance().getBigArrayTracker().toString());
 
-        if(tookInMillis>BlacklistData.getInstance().getThreshold2())
-            BlacklistData.getInstance().addToBlacklist(query,identifier,tookInMillis);
-
-        if(tookInMillis>BlacklistData.getInstance().getThreshold1())
-        {
-            HeaderWarning.addWarning(
-                "The request was identified as a Bad request, further such requests might get blacklisted"
-            );
+        if (tookInMillis > BlacklistData.getInstance().getThreshold2()) {
+            BlacklistData.getInstance().addToBlacklist(query, identifier, tookInMillis);
         }
 
+        if (tookInMillis > BlacklistData.getInstance().getThreshold1()) {
+            HeaderWarning.addWarning(
+                "The request was identified as a bad request. Further such requests might be blacklisted due to execution time."
+            );
+        }
     }
+
 
     @Override
     public RestStatus status() {
