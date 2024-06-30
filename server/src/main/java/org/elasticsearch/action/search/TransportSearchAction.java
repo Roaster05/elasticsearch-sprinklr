@@ -91,6 +91,8 @@ import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -120,6 +122,12 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         1,
         Property.NodeScope
     );
+    public static final Setting<String> MODIFIED_PARTIAL_SEARCH_RESULT_LIMIT = Setting.simpleString(
+        "action.search.modified_partial_search_result_limit",
+        "",
+        Property.Dynamic,
+        Property.NodeScope
+    );
 
     private final ThreadPool threadPool;
     private final ClusterService clusterService;
@@ -132,6 +140,52 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
     private final CircuitBreaker circuitBreaker;
     private final ExecutorSelector executorSelector;
     private final int defaultPreFilterShardSize;
+    private String previousPartialString="";
+    private long previousPartialAge=Long.MAX_VALUE;
+
+    public static long parseDurationToMillis(String duration) {
+        long millis = 0;
+
+        // Define the regex pattern for matching each time component
+        String regex = "(?:(\\d+)yr)?(?:(\\d+)mo)?(?:(\\d+)da)?(?:(\\d+)hr)?(?:(\\d+)mi)?(?:(\\d+)se)?";
+        Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(duration);
+
+        // Constants for converting each time unit to milliseconds
+        long MILLIS_IN_SECOND = 1000;
+        long MILLIS_IN_MINUTE = 60 * MILLIS_IN_SECOND;
+        long MILLIS_IN_HOUR = 60 * MILLIS_IN_MINUTE;
+        long MILLIS_IN_DAY = 24 * MILLIS_IN_HOUR;
+        long MILLIS_IN_MONTH = 30 * MILLIS_IN_DAY;
+        long MILLIS_IN_YEAR = 365 * MILLIS_IN_DAY;
+
+        // Iterate over the matches and sum up the total duration in milliseconds
+        if (matcher.matches()) {
+            if (matcher.group(1) != null) {
+                millis += Long.parseLong(matcher.group(1)) * MILLIS_IN_YEAR;
+            }
+            if (matcher.group(2) != null) {
+                millis += Long.parseLong(matcher.group(2)) * MILLIS_IN_MONTH;
+            }
+            if (matcher.group(3) != null) {
+                millis += Long.parseLong(matcher.group(3)) * MILLIS_IN_DAY;
+            }
+            if (matcher.group(4) != null) {
+                millis += Long.parseLong(matcher.group(4)) * MILLIS_IN_HOUR;
+            }
+            if (matcher.group(5) != null) {
+                millis += Long.parseLong(matcher.group(5)) * MILLIS_IN_MINUTE;
+            }
+            if (matcher.group(6) != null) {
+                millis += Long.parseLong(matcher.group(6)) * MILLIS_IN_SECOND;
+            }
+        }
+        if(millis==0)
+            return Long.MAX_VALUE;
+
+        return millis;
+    }
+
 
     @Inject
     public TransportSearchAction(
@@ -916,13 +970,19 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
 
     @SuppressWarnings("checkstyle:DescendantToken")
     public void checkPartialSearchResultsFlag(SearchRequest searchRequest, ClusterState clusterState) {
+        String newSetting  = clusterService.getClusterSettings().get(MODIFIED_PARTIAL_SEARCH_RESULT_LIMIT);
+        if(newSetting.equals(previousPartialString)==false)
+        {
+            previousPartialString = newSetting;
+            previousPartialAge = parseDurationToMillis(previousPartialString);
+        }
         boolean allowPartialResults = true;
-
+        long timeBefore = System.currentTimeMillis() - previousPartialAge;
         for (String index : searchRequest.indices()) {
             IndexMetadata indexMetadata = clusterState.metadata().index(index);
 
             if (indexMetadata != null) {
-                if (!indexMetadata.isPartialSearchAllowed()) {
+                if (!indexMetadata.isPartialSearchAllowed() || (indexMetadata.getCreationDate()>timeBefore)) {
                     allowPartialResults = false;
                     break;  // No need to check further if one is false
                 }
