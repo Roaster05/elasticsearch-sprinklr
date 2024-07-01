@@ -396,7 +396,7 @@ public class BigArrays {
                 // have to if the delta is negative
                 if (delta > 0) {
                     try {
-                        breaker.addEstimateBytesAndMaybeBreak(delta, "<reused_arrays>");
+                        breaker.addEstimateBytesAndMaybeBreak(delta, "[agg]<reused_arrays>");
                     } catch (CircuitBreakingException e) {
                         if (isDataAlreadyCreated) {
                             // since we've already created the data, we need to

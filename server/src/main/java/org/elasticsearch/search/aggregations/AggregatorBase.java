@@ -139,7 +139,7 @@ public abstract class AggregatorBase extends Aggregator {
     protected long addRequestCircuitBreakerBytes(long bytes) {
         // Only use the potential to circuit break if bytes are being incremented
         if (bytes > 0) {
-            context.breaker().addEstimateBytesAndMaybeBreak(bytes, "<agg [" + name + "]>");
+            context.breaker().addEstimateBytesAndMaybeBreak(bytes, "[agg]<agg [" + name + "]>");
         } else {
             context.breaker().addWithoutBreaking(bytes);
         }

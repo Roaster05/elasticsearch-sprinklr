@@ -33,7 +33,7 @@ public class PreallocatedCircuitBreakerService extends CircuitBreakerService imp
             throw new IllegalArgumentException("can't preallocate negative or zero bytes but got [" + bytesToPreallocate + "]");
         }
         CircuitBreaker nextBreaker = next.getBreaker(breakerToPreallocate);
-        nextBreaker.addEstimateBytesAndMaybeBreak(bytesToPreallocate, "preallocate[" + label + "]");
+        nextBreaker.addEstimateBytesAndMaybeBreak(bytesToPreallocate, "[agg]preallocate[" + label + "]");
         this.next = next;
         this.preallocated = new PreallocatedCircuitBreaker(nextBreaker, bytesToPreallocate);
     }
