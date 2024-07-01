@@ -13,6 +13,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.lucene.util.Constants;
 import org.apache.lucene.util.SetOnce;
 import org.elasticsearch.Assertions;
+import org.elasticsearch.BlacklistData;
 import org.elasticsearch.Build;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.ElasticsearchTimeoutException;
@@ -431,6 +432,7 @@ public class Node implements Closeable {
                 .stream()
                 .map(DiscoveryNodeRole::roleName)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+            BlacklistData.getInstance().setnode(NODE_NAME_SETTING.get(tmpSettings));
             logger.info(
                 "node name [{}], node ID [{}], cluster name [{}], roles {}",
                 NODE_NAME_SETTING.get(tmpSettings),

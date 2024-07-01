@@ -341,6 +341,8 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
                     protected void executePhaseOnShard(
                         SearchShardIterator shardIt,
                         SearchShardTarget shard,
+                        String identifier,
+                        String query,
                         SearchActionListener<SearchPhaseResult> listener
                     ) {
                         final Transport.Connection connection = getConnection(shard.getClusterAlias(), shard.getNodeId());
@@ -353,7 +355,7 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
                             @Override
                             public void run() {
                                 final AtomicArray<SearchPhaseResult> atomicArray = results.getAtomicArray();
-                                sendSearchResponse(InternalSearchResponse.empty(), atomicArray);
+                                sendSearchResponseNew(InternalSearchResponse.empty(), atomicArray, context.getRequest());
                             }
                         };
                     }

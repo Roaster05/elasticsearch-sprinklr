@@ -8,9 +8,15 @@
 
 package org.elasticsearch.rest.action.search;
 
+import org.elasticsearch.Blacklist;
+import org.elasticsearch.BlacklistData;
+import org.elasticsearch.ElasticsearchBlacklistException;
+import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.Version;
+import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionRequestValidationException;
+import org.elasticsearch.action.admin.cluster.blacklist.BlacklistUpdateResponse;
 import org.elasticsearch.action.search.SearchAction;
 import org.elasticsearch.action.search.SearchContextId;
 import org.elasticsearch.action.search.SearchRequest;
@@ -43,8 +49,11 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.IntConsumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.unmodifiableList;
@@ -92,6 +101,73 @@ public class RestSearchAction extends BaseRestHandler {
         );
     }
 
+    /**
+     *
+     * @param queryContent
+     * Basically rather than searching for same query tried to reduce any numbers to their logarithmic base
+     * as this will kind of broaden our similar query classifier and will incorporate
+     * queries of somewhat similar time complexities.
+     * @return
+     */
+
+    public static String roundNumbers(String queryContent) {
+        Pattern numberPattern = Pattern.compile("\\d+");
+        Matcher matcher = numberPattern.matcher(queryContent);
+        StringBuffer sb = new StringBuffer();
+
+        while (matcher.find()) {
+            int number = Integer.parseInt(matcher.group());
+            int roundedNumber = roundToNearest(number);
+            matcher.appendReplacement(sb, String.valueOf(roundedNumber));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    private static int roundToNearest(int number) {
+        if (number < 10) return number;
+
+        return (int) Math.log10(number);
+    }
+
+    /**
+     * Handles the request by accessing the cache containing bad queries and bypasses the query if it looks like a potential bad request.
+     * The reason for bypassing the request is also mentioned, whether it is query-based or identifier-based, based on the response
+     * received.
+     *
+     * @param query The query string to be checked.
+     * @param identifier The identifier associated with the query.
+     * @throws ElasticsearchException if there is an issue handling the request.
+     */
+    public void handleRequest(String query, String identifier) throws ElasticsearchException {
+        int ex = BlacklistData.getInstance().shouldAllowRequest(query, identifier);
+
+        if (ex==0) {
+            return;
+        } else if(ex==1)  {
+            throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: "
+                + identifier+"as this query has been blacklisted");
+        }
+        else
+            throw new ElasticsearchBlacklistException("Request denied for query: " + query + ", identifier: "
+                + identifier+"as this identifier has been blacklisted");
+    }
+
+
+    public static String addRawPathToJson(String jsonString, String rawPathValue) {
+        if (jsonString.trim().startsWith("{") && jsonString.trim().endsWith("}")) {
+            // Insert the raw_path at the beginning of the JSON object
+            String modifiedJsonString = jsonString.trim();
+            modifiedJsonString = modifiedJsonString.substring(0, 1) +
+                "\"raw_path\":\"" + rawPathValue + "\"," + modifiedJsonString.substring(1);
+            return modifiedJsonString;
+        } else {
+            // Handle invalid JSON object case
+            System.err.println("Invalid JSON object");
+            return null;
+        }
+
+    }
     @Override
     public RestChannelConsumer prepareRequest(final RestRequest request, final NodeClient client) throws IOException {
         SearchRequest searchRequest;
@@ -100,6 +176,7 @@ public class RestSearchAction extends BaseRestHandler {
         } else {
             searchRequest = new SearchRequest();
         }
+
         /*
          * We have to pull out the call to `source().size(size)` because
          * _update_by_query and _delete_by_query uses this same parsing
@@ -112,16 +189,59 @@ public class RestSearchAction extends BaseRestHandler {
          * be null later. If that is confusing to you then you are in good
          * company.
          */
+
+        String newsimplifiedQuery = roundNumbers(addRawPathToJson(request.content().utf8ToString(),request.rawPath()));
+        String simplifiedQuery = (newsimplifiedQuery);
+        // Currently set the identifer randomly later we will be obtaining it from the request headers.
+        String simplifiedIdentifier = UUID.randomUUID().toString();
+
+        if(BlacklistData.getInstance().getReset()==false)
+            handleRequest(simplifiedQuery, simplifiedIdentifier);
+        searchRequest.setIdentifier(simplifiedIdentifier);
+        searchRequest.setQuery(simplifiedQuery);
         IntConsumer setSize = size -> searchRequest.source().size(size);
         request.withContentOrSourceParamParserOrNull(
             parser -> parseSearchRequest(searchRequest, request, parser, client.getNamedWriteableRegistry(), setSize)
         );
-
         return channel -> {
             RestCancellableNodeClient cancelClient = new RestCancellableNodeClient(client, request.getHttpChannel());
             cancelClient.execute(SearchAction.INSTANCE, searchRequest, new RestStatusToXContentListener<>(channel));
+
+            /**
+             * Pushes a Blacklist Update Action only if the lock is set to true, indicating a need to sync
+             * the local storage with the global cache. This is necessary when the local cache is ahead,
+             * requiring a new state to be committed.
+             *
+             * @param lock The lock indicating whether synchronization is needed.
+             */
+            if(BlacklistData.getInstance().getLock())
+            {
+                // Updating the blacklist without affecting the search response
+                Blacklist blacklistUpdate = BlacklistData.getInstance().getBlacklist();
+                client.updateBlacklist(blacklistUpdate, new ActionListener<BlacklistUpdateResponse>() {
+                    @Override
+
+                    public void onResponse(BlacklistUpdateResponse blacklistUpdateResponse) {
+                        // to handle if we receive acknowledged for cluster state update
+                        BlacklistData.getInstance().setLock(false);
+                        if(BlacklistData.getInstance().getReset())
+                            BlacklistData.getInstance().setReset(false);
+                        return;
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        // We can handle failure of cluster state update as well but currently not altering the response of search
+                        //even if received a failure
+                        return;
+
+                    }
+                });
+
+            }
         };
     }
+
 
     /**
      * Parses the rest request on top of the SearchRequest, preserving values that are not overridden by the rest request.

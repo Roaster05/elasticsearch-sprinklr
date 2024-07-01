@@ -10,6 +10,9 @@ package org.elasticsearch.cluster;
 
 import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
 
+import org.elasticsearch.Blacklist;
+import org.elasticsearch.BlacklistData;
+import org.elasticsearch.BlacklistEntry;
 import org.elasticsearch.Version;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.cluster.block.ClusterBlock;
@@ -45,14 +48,19 @@ import org.elasticsearch.xcontent.ToXContentFragment;
 import org.elasticsearch.xcontent.XContentBuilder;
 
 import java.io.IOException;
+import java.time.format.DateTimeFormatter;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
 import static org.elasticsearch.cluster.coordination.Coordinator.ZEN1_BWC_TERM;
+
+
+
 
 /**
  * Represents the current state of the cluster.
@@ -171,6 +179,8 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
     // built on demand
     private volatile RoutingNodes routingNodes;
 
+    private final Blacklist clusterblacklist;
+
     public ClusterState(long version, String stateUUID, ClusterState state) {
         this(
             state.clusterName,
@@ -183,7 +193,8 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             state.customs(),
             -1,
             false,
-            state.routingNodes
+            state.routingNodes,
+            state.clusterblacklist
         );
     }
 
@@ -198,7 +209,8 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         ImmutableOpenMap<String, Custom> customs,
         int minimumMasterNodesOnPublishingMaster,
         boolean wasReadFromDiff,
-        @Nullable RoutingNodes routingNodes
+        @Nullable RoutingNodes routingNodes,
+        Blacklist clusterblacklist
     ) {
         this.version = version;
         this.stateUUID = stateUUID;
@@ -211,6 +223,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         this.minimumMasterNodesOnPublishingMaster = minimumMasterNodesOnPublishingMaster;
         this.wasReadFromDiff = wasReadFromDiff;
         this.routingNodes = routingNodes;
+        this.clusterblacklist = clusterblacklist;
         assert routingNodes == null || routingNodes.equals(new RoutingNodes(this))
             : "RoutingNodes [" + routingNodes + "] are not consistent with this cluster state [" + new RoutingNodes(this) + "]";
     }
@@ -239,6 +252,10 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
      */
     public String stateUUID() {
         return this.stateUUID;
+    }
+
+    public Blacklist clusterblacklist() {
+        return this.clusterblacklist;
     }
 
     public DiscoveryNodes nodes() {
@@ -338,6 +355,52 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         return routingNodes;
     }
 
+    /**
+     * Formats the given cluster blacklist into a JSON-like string representation.
+     *
+     * This method iterates through the entries of the provided {@link Blacklist} object and constructs
+     * a formatted string containing details about each entry. Each entry includes the query, identifier,
+     * execution time (or memory used if applicable), timestamp, and node.
+     *
+     * If the execution time of an entry exceeds {@code Integer.MAX_VALUE}, it is considered as memory used
+     * and adjusted accordingly.
+     *
+     * @param clusterblacklist The {@link Blacklist} containing the entries to be formatted.
+     * @return A string representing the formatted cluster blacklist in a JSON-like structure.
+     */
+    public static String formatClusterBlacklist(Blacklist clusterblacklist) {
+        List<BlacklistEntry> entries = clusterblacklist.getEntries();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("[\n");
+
+        for (int i = 0; i < entries.size(); i++) {
+            BlacklistEntry entry = entries.get(i);
+            sb.append("{\n");
+            sb.append("  \"Query\": \"").append(entry.getQuery()).append("\",\n");
+            sb.append("  \"Identifier\": \"").append(entry.getIdentifier()).append("\",\n");
+            if(entry.getExecutionTime()>Integer.MAX_VALUE)
+                sb.append("  \"MemoryUsed\": ").append(entry.getExecutionTime()-Integer.MAX_VALUE).append(" bytes,\n");
+            else
+                sb.append("  \"ExecutionTime\": ").append(entry.getExecutionTime()).append(" ms,\n");
+            sb.append("  \"Timestamp\": \"").append(entry.getTimestamp().format(DateTimeFormatter.ISO_DATE_TIME)).append("\"\n");
+            sb.append("  \"Node\": \"").append(entry.getNode()).append("\"\n");
+            sb.append("}");
+
+            if (i < entries.size() - 1) {
+                sb.append(",\n");
+            } else {
+                sb.append("\n");
+            }
+        }
+
+        sb.append("]");
+
+        return sb.toString();
+    }
+
+
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
@@ -350,6 +413,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             .append("\n");
         sb.append("version: ").append(version).append("\n");
         sb.append("state uuid: ").append(stateUUID).append("\n");
+        sb.append("cluster blacklist:").append("\n").append(formatClusterBlacklist(clusterblacklist)).append("\n");
         sb.append("from_diff: ").append(wasReadFromDiff).append("\n");
         sb.append("meta data version: ").append(metadata.version()).append("\n");
         sb.append(TAB).append("coordination_metadata:\n");
@@ -427,7 +491,8 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         METADATA("metadata"),
         ROUTING_TABLE("routing_table"),
         ROUTING_NODES("routing_nodes"),
-        CUSTOMS("customs");
+        CUSTOMS("customs"),
+        CLUSTERBLACKLIST("clusterblacklist");
 
         private static Map<String, Metric> valueToEnum;
 
@@ -484,6 +549,24 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
 
         if (metrics.contains(Metric.MASTER_NODE)) {
             builder.field("master_node", nodes().getMasterNodeId());
+        }
+
+        /**
+         * Checks if the metrics contain {@link Metric#CLUSTERBLACKLIST} and, if so, adds the formatted cluster blacklist
+         * to the provided {@link XContentBuilder}.
+         *
+         * This method ensures that the cluster blacklist is included in the response if the relevant metric is requested.
+         * The cluster blacklist can be obtained through an API call to <code>_cluster/state/clusterblacklist</code>, which
+         * can be used for implementing a visualization tool for blacklisted queries, among other purposes.
+         *
+         * @param metrics The set of metrics to check.
+         * @param builder The {@link XContentBuilder} used to build the response.
+         * @param clusterblacklist The {@link Blacklist} containing the cluster blacklist entries to be formatted.
+         * @throws IOException If an I/O error occurs while adding the field to the builder.
+         */
+        if(metrics.contains(Metric.CLUSTERBLACKLIST)) {
+
+            builder.field("cluster_blacklist",formatClusterBlacklist(clusterblacklist));
         }
 
         if (metrics.contains(Metric.BLOCKS)) {
@@ -594,6 +677,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         private final ClusterName clusterName;
         private long version = 0;
         private String uuid = UNKNOWN_UUID;
+        private Blacklist clusterblacklist;
         private Metadata metadata = Metadata.EMPTY_METADATA;
         private RoutingTable routingTable = RoutingTable.EMPTY_ROUTING_TABLE;
         private DiscoveryNodes nodes = DiscoveryNodes.EMPTY_NODES;
@@ -607,6 +691,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             this.clusterName = state.clusterName;
             this.version = state.version();
             this.uuid = state.stateUUID();
+            this.clusterblacklist = state.clusterblacklist();
             this.nodes = state.nodes();
             this.routingTable = state.routingTable();
             this.metadata = state.metadata();
@@ -670,6 +755,12 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
 
         public Builder stateUUID(String uuid) {
             this.uuid = uuid;
+            this.clusterblacklist = BlacklistData.getInstance().getBlacklist(clusterblacklist);
+            return this;
+        }
+
+        public Builder clusterblacklist(Blacklist newblacklist) {
+            this.clusterblacklist = newblacklist;
             return this;
         }
 
@@ -701,6 +792,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
 
         public ClusterState build() {
             if (UNKNOWN_UUID.equals(uuid)) {
+                clusterblacklist = BlacklistData.getInstance().getBlacklist(clusterblacklist);
                 uuid = UUIDs.randomBase64UUID();
             }
             final RoutingNodes routingNodes;
@@ -722,7 +814,8 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
                 customs.build(),
                 minimumMasterNodesOnPublishingMaster,
                 fromDiff,
-                routingNodes
+                routingNodes,
+                clusterblacklist
             );
         }
 
@@ -741,6 +834,8 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             return readFrom(in, localNode);
 
         }
+
+
     }
 
     @Override
@@ -756,6 +851,8 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         ClusterName clusterName = new ClusterName(in);
         Builder builder = new Builder(clusterName);
         builder.version = in.readLong();
+        builder.clusterblacklist = Blacklist.readFrom(in);
+        BlacklistData.getInstance().getBlacklist(builder.clusterblacklist);
         builder.uuid = in.readString();
         builder.metadata = Metadata.readFrom(in);
         builder.routingTable = RoutingTable.readFrom(in);
@@ -774,6 +871,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
     public void writeTo(StreamOutput out) throws IOException {
         clusterName.writeTo(out);
         out.writeLong(version);
+        clusterblacklist.writeTo(out);
         out.writeString(stateUUID);
         metadata.writeTo(out);
         routingTable.writeTo(out);
@@ -801,6 +899,8 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
 
         private final long toVersion;
 
+        private final Blacklist clusterblacklist;
+
         private final String fromUuid;
 
         private final String toUuid;
@@ -823,6 +923,8 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             fromUuid = before.stateUUID;
             toUuid = after.stateUUID;
             toVersion = after.version;
+            clusterblacklist = after.clusterblacklist;
+            BlacklistData.getInstance().getBlacklist(clusterblacklist);
             clusterName = after.clusterName;
             routingTable = after.routingTable.diff(before.routingTable);
             nodes = after.nodes.diff(before.nodes);
@@ -833,10 +935,13 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
         }
 
         ClusterStateDiff(StreamInput in, DiscoveryNode localNode) throws IOException {
+            this.clusterblacklist = new Blacklist();
             clusterName = new ClusterName(in);
             fromUuid = in.readString();
             toUuid = in.readString();
             toVersion = in.readLong();
+            Blacklist.readFrom(in);
+            BlacklistData.getInstance().getBlacklist(clusterblacklist);
             routingTable = RoutingTable.readDiffFrom(in);
             nodes = DiscoveryNodes.readDiffFrom(in, localNode);
             metadata = Metadata.readDiffFrom(in);
@@ -851,6 +956,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             out.writeString(fromUuid);
             out.writeString(toUuid);
             out.writeLong(toVersion);
+            clusterblacklist.writeTo(out);
             routingTable.writeTo(out);
             nodes.writeTo(out);
             metadata.writeTo(out);
@@ -873,6 +979,8 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             }
             builder.stateUUID(toUuid);
             builder.version(toVersion);
+            builder.clusterblacklist(state.clusterblacklist);
+            BlacklistData.getInstance().getBlacklist(state.clusterblacklist);
             builder.routingTable(routingTable.apply(state.routingTable));
             builder.nodes(nodes.apply(state.nodes));
             builder.metadata(metadata.apply(state.metadata));

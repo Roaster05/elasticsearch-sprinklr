@@ -8,6 +8,7 @@
 package org.elasticsearch.common.settings;
 
 import org.apache.logging.log4j.LogManager;
+import org.elasticsearch.action.admin.cluster.blacklist.TransportBlacklistUpdateAction;
 import org.elasticsearch.action.admin.cluster.configuration.TransportAddVotingConfigExclusionsAction;
 import org.elasticsearch.action.admin.indices.close.TransportCloseIndexAction;
 import org.elasticsearch.action.search.TransportSearchAction;
@@ -485,6 +486,10 @@ public final class ClusterSettings extends AbstractScopedSettings {
                 SearchService.DEFAULT_KEEPALIVE_SETTING,
                 SearchService.KEEPALIVE_INTERVAL_SETTING,
                 SearchService.MAX_KEEPALIVE_SETTING,
+                SearchService.BLACKLIST_THRESHOLD1,
+                SearchService.BLACKLIST_THRESHOLD2,
+                SearchService.BLACKLIST_ALLOWED,
+                TransportBlacklistUpdateAction.BLACKLIST_RESET,
                 SearchService.ALLOW_EXPENSIVE_QUERIES,
                 MultiBucketConsumerService.MAX_BUCKET_SETTING,
                 SearchService.LOW_LEVEL_CANCELLATION_SETTING,
