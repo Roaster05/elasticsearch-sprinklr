@@ -195,8 +195,7 @@ public class RestSearchAction extends BaseRestHandler {
         // Currently set the identifer randomly later we will be obtaining it from the request headers.
         String simplifiedIdentifier = UUID.randomUUID().toString();
 
-        if(BlacklistData.getInstance().getReset()==false)
-            handleRequest(simplifiedQuery, simplifiedIdentifier);
+        handleRequest(simplifiedQuery, simplifiedIdentifier);
         searchRequest.setIdentifier(simplifiedIdentifier);
         searchRequest.setQuery(simplifiedQuery);
         IntConsumer setSize = size -> searchRequest.source().size(size);
@@ -224,8 +223,6 @@ public class RestSearchAction extends BaseRestHandler {
                     public void onResponse(BlacklistUpdateResponse blacklistUpdateResponse) {
                         // to handle if we receive acknowledged for cluster state update
                         BlacklistData.getInstance().setLock(false);
-                        if(BlacklistData.getInstance().getReset())
-                            BlacklistData.getInstance().setReset(false);
                         return;
                     }
 

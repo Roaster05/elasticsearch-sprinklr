@@ -899,7 +899,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
 
         private final long toVersion;
 
-        private final Blacklist clusterblacklist;
+        private Blacklist clusterblacklist;
 
         private final String fromUuid;
 
@@ -940,7 +940,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             fromUuid = in.readString();
             toUuid = in.readString();
             toVersion = in.readLong();
-            Blacklist.readFrom(in);
+            clusterblacklist = Blacklist.readFrom(in);
             BlacklistData.getInstance().getBlacklist(clusterblacklist);
             routingTable = RoutingTable.readDiffFrom(in);
             nodes = DiscoveryNodes.readDiffFrom(in, localNode);
@@ -956,6 +956,7 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             out.writeString(fromUuid);
             out.writeString(toUuid);
             out.writeLong(toVersion);
+            clusterblacklist = BlacklistData.getInstance().getBlacklist(clusterblacklist);
             clusterblacklist.writeTo(out);
             routingTable.writeTo(out);
             nodes.writeTo(out);
@@ -979,8 +980,8 @@ public class ClusterState implements ToXContentFragment, Diffable<ClusterState> 
             }
             builder.stateUUID(toUuid);
             builder.version(toVersion);
-            builder.clusterblacklist(state.clusterblacklist);
-            BlacklistData.getInstance().getBlacklist(state.clusterblacklist);
+            builder.clusterblacklist(clusterblacklist);
+            BlacklistData.getInstance().getBlacklist(clusterblacklist);
             builder.routingTable(routingTable.apply(state.routingTable));
             builder.nodes(nodes.apply(state.nodes));
             builder.metadata(metadata.apply(state.metadata));
