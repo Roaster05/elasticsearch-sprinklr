@@ -33,7 +33,7 @@ public class BlacklistData {
     private Blacklist blacklist;
     private BigArrayTracker bigArrayTracker;
     public long threshold1 = 3000;
-    public long threshold2 = 1000;
+    public long threshold2 = 5;
     public boolean allowed = false;
     public String nodename = "";
     public boolean lock = false;
@@ -183,14 +183,14 @@ public class BlacklistData {
                     identifierScore += 1.0;
                 }
             }
-            if (identifierScore >= 50) {
+            if (identifierScore >= 2*threshold2) {
                 return 2;
             }
             long queryCount = blacklist.getEntries().stream()
                 .filter(entry -> Objects.equals(entry.getQuery(), query))
                 .count();
 
-            if (queryCount >= 5) {
+            if (queryCount >= threshold1) {
                 return 1;
             } else {
                 return 0;
