@@ -241,7 +241,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
                 assert shardRoutings.skip() == false;
                 assert shardIndexMap.containsKey(shardRoutings);
                 int shardIndex = shardIndexMap.get(shardRoutings);
-                performPhaseOnShard(shardIndex, shardRoutings, shardRoutings.nextOrNull());
+                performPhaseOnShard(shardIndex, shardRoutings, shardRoutings.nextOrNull(),request.getIdentifier(),request.getQuery());
             }
         }
     }
@@ -294,7 +294,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
         return true;
     }
 
-    protected void performPhaseOnShard(final int shardIndex, final SearchShardIterator shardIt, final SearchShardTarget shard) {
+    protected void performPhaseOnShard(final int shardIndex, final SearchShardIterator shardIt, final SearchShardTarget shard,String identifier, String query) {
         /*
          * We capture the thread that this phase is starting on. When we are called back after executing the phase, we are either on the
          * same thread (because we never went async, or the same thread was selected from the thread pool) or a different thread. If we
@@ -313,7 +313,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
             Runnable r = () -> {
                 final Thread thread = Thread.currentThread();
                 try {
-                    executePhaseOnShard(shardIt, shard, new SearchActionListener<Result>(shard, shardIndex) {
+                    executePhaseOnShard(shardIt, shard,identifier,query, new SearchActionListener<Result>(shard, shardIndex) {
                         @Override
                         public void innerOnResponse(Result result) {
                             try {
@@ -360,9 +360,12 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
      * @param shard the shard routing to send the request for
      * @param listener the listener to notify on response
      */
+
     protected abstract void executePhaseOnShard(
         SearchShardIterator shardIt,
         SearchShardTarget shard,
+        String identifier,
+        String query,
         SearchActionListener<Result> listener
     );
 
@@ -502,7 +505,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
             );
         } else {
             if (lastShard == false) {
-                performPhaseOnShard(shardIndex, shardIt, nextShard);
+                performPhaseOnShard(shardIndex, shardIt, nextShard,request.getIdentifier(),request.getQuery());
             }
         }
     }
@@ -663,6 +666,18 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
         String scrollId,
         String searchContextId
     ) {
+        return buildSearchResponseNew(internalSearchResponse, failures, scrollId, searchContextId, null);
+    }
+
+    private SearchResponse buildSearchResponseNew(
+        InternalSearchResponse internalSearchResponse,
+        ShardSearchFailure[] failures,
+        String scrollId,
+        String searchContextId,
+        SearchRequest searchRequest
+    ) {
+        String identifier = (searchRequest != null) ? searchRequest.getIdentifier() : null;
+        String query = (searchRequest != null) ? searchRequest.getQuery() : null;
         int numSuccess = successfulOps.get();
         int numFailures = failures.length;
         assert numSuccess + numFailures == getNumShards()
@@ -676,9 +691,12 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
             buildTookInMillis(),
             failures,
             clusters,
-            searchContextId
+            searchContextId,
+            identifier,
+            query
         );
     }
+
 
     boolean buildPointInTimeFromSearchResults() {
         return false;
@@ -705,6 +723,30 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
                 }
             }
             listener.onResponse(buildSearchResponse(internalSearchResponse, failures, scrollId, searchContextId));
+        }
+    }
+
+    @Override
+    public void sendSearchResponseNew(InternalSearchResponse internalSearchResponse, AtomicArray<SearchPhaseResult> queryResults, SearchRequest searchRequest) {
+        ShardSearchFailure[] failures = buildShardFailures();
+        Boolean allowPartialResults = request.allowPartialSearchResults();
+        assert allowPartialResults != null : "SearchRequest missing setting for allowPartialSearchResults";
+        if (allowPartialResults == false && failures.length > 0) {
+            raisePhaseFailure(new SearchPhaseExecutionException("", "Shard failures", null, failures));
+        } else {
+            final Version minNodeVersion = clusterState.nodes().getMinNodeVersion();
+            final String scrollId = request.scroll() != null ? TransportSearchHelper.buildScrollId(queryResults, minNodeVersion) : null;
+            final String searchContextId;
+            if (buildPointInTimeFromSearchResults()) {
+                searchContextId = SearchContextId.encode(queryResults.asList(), aliasFilter, minNodeVersion);
+            } else {
+                if (request.source() != null && request.source().pointInTimeBuilder() != null) {
+                    searchContextId = request.source().pointInTimeBuilder().getEncodedId();
+                } else {
+                    searchContextId = null;
+                }
+            }
+            listener.onResponse(buildSearchResponseNew(internalSearchResponse, failures, scrollId, searchContextId,searchRequest));
         }
     }
 
@@ -771,7 +813,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
     }
 
     @Override
-    public final ShardSearchRequest buildShardSearchRequest(SearchShardIterator shardIt, int shardIndex) {
+    public final ShardSearchRequest buildShardSearchRequest(SearchShardIterator shardIt, int shardIndex, String identifier, String query) {
         AliasFilter filter = aliasFilter.get(shardIt.shardId().getIndex().getUUID());
         assert filter != null;
         float indexBoost = concreteIndexBoosts.getOrDefault(shardIt.shardId().getIndex().getUUID(), DEFAULT_INDEX_BOOST);
@@ -786,7 +828,9 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
             timeProvider.getAbsoluteStartMillis(),
             shardIt.getClusterAlias(),
             shardIt.getSearchContextId(),
-            shardIt.getSearchContextKeepAlive()
+            shardIt.getSearchContextKeepAlive(),
+            identifier,
+            query
         );
         // if we already received a search result we can inform the shard that it
         // can return a null response if the request rewrites to match none rather

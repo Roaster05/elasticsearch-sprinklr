@@ -86,6 +86,10 @@ public abstract class AggregationContext implements Releasable {
      */
     public abstract long nowInMillis();
 
+    public abstract String getIdentifier();
+
+    public abstract  String getQuery();
+
     /**
      * Lookup the context for a field.
      */
@@ -293,6 +297,8 @@ public abstract class AggregationContext implements Releasable {
      * Elasticsearch node.
      */
     public static class ProductionAggregationContext extends AggregationContext {
+        private final String query;
+        private final String identifier;
         private final SearchExecutionContext context;
         private final PreallocatedCircuitBreakerService preallocatedBreakerService;
         private final BigArrays bigArrays;
@@ -311,6 +317,8 @@ public abstract class AggregationContext implements Releasable {
         private final List<Aggregator> releaseMe = new ArrayList<>();
 
         public ProductionAggregationContext(
+            String query,
+            String identifier,
             AnalysisRegistry analysisRegistry,
             SearchExecutionContext context,
             BigArrays bigArrays,
@@ -326,6 +334,8 @@ public abstract class AggregationContext implements Releasable {
             Function<Query, Query> filterQuery,
             boolean enableRewriteToFilterByFilter
         ) {
+            this.query = query;
+            this.identifier = identifier;
             this.analysisRegistry = analysisRegistry;
             this.context = context;
             if (bytesToPreallocate == 0) {
@@ -385,6 +395,14 @@ public abstract class AggregationContext implements Releasable {
         @Override
         public Analyzer getNamedAnalyzer(String analyzer) throws IOException {
             return analysisRegistry.getAnalyzer(analyzer);
+        }
+
+        public String getIdentifier() {
+            return  identifier;
+        }
+
+        public String getQuery() {
+            return query;
         }
 
         @Override

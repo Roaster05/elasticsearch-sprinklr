@@ -11,6 +11,7 @@ package org.elasticsearch.indices.breaker;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.message.ParameterizedMessage;
+import org.elasticsearch.BlacklistData;
 import org.elasticsearch.common.breaker.ChildMemoryCircuitBreaker;
 import org.elasticsearch.common.breaker.CircuitBreaker;
 import org.elasticsearch.common.breaker.CircuitBreakingException;
@@ -21,6 +22,7 @@ import org.elasticsearch.common.settings.Setting.Property;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
+import org.elasticsearch.common.util.BigArrayTracker;
 import org.elasticsearch.common.util.concurrent.ReleasableLock;
 import org.elasticsearch.core.Booleans;
 import org.elasticsearch.core.TimeValue;
@@ -411,12 +413,34 @@ public class HierarchyCircuitBreakerService extends CircuitBreakerService {
     }
 
     /**
-     * Checks whether the parent breaker has been tripped
+     * Checks whether the parent circuit breaker has been tripped and blacklists the query
+     * that occupies the highest storage at the point of circuit breaking.
+     *
+     * @param newBytesReserved the new bytes reserved
+     * @param label the label associated with the circuit breaker
+     * @throws CircuitBreakingException if the parent circuit breaker is tripped
      */
     public void checkParentLimit(long newBytesReserved, String label) throws CircuitBreakingException {
         final MemoryUsage memoryUsed = memoryUsed(newBytesReserved);
         long parentLimit = this.parentSettings.getLimit();
+
+        // Check if total memory usage exceeds the parent limit and apply over-limit strategy
         if (memoryUsed.totalUsage > parentLimit && overLimitStrategy.overLimit(memoryUsed).totalUsage > parentLimit) {
+            String boolBlacklisted = "";
+
+            // Attempt to blacklist the query with the highest memory usage
+            BigArrayTracker.RequestValue toBeBlacklisted = BlacklistData.getInstance().getBigArrayTracker().removeEntryWithHighestMemory();
+            if (toBeBlacklisted != null) {
+                boolBlacklisted = " A query has been blacklisted due to this Circuit Breaking Exception. The query had "
+                    + toBeBlacklisted.getUsedMemory() + " bytes of BigArray usage at that moment.";
+                BlacklistData.getInstance().addToBlacklist(
+                    toBeBlacklisted.getQuery(),
+                    toBeBlacklisted.getIdentifier(),
+                    toBeBlacklisted.getUsedMemory() + Integer.MAX_VALUE
+                );
+            }
+
+            // Increment parent trip count and build exception message
             this.parentTripCount.incrementAndGet();
             final String messageString = buildParentTripMessage(
                 newBytesReserved,
@@ -426,15 +450,18 @@ public class HierarchyCircuitBreakerService extends CircuitBreakerService {
                 this.trackRealMemoryUsage,
                 this.breakers
             );
-            // derive durability of a tripped parent breaker depending on whether the majority of memory tracked by
-            // child circuit breakers is categorized as transient or permanent.
+
+            // Determine durability of the tripped parent breaker based on child memory usage
             CircuitBreaker.Durability durability = memoryUsed.transientChildUsage >= memoryUsed.permanentChildUsage
                 ? CircuitBreaker.Durability.TRANSIENT
                 : CircuitBreaker.Durability.PERMANENT;
+
+            // Log and throw CircuitBreakingException
             logger.debug(() -> new ParameterizedMessage("{}", messageString));
-            throw new CircuitBreakingException(messageString, memoryUsed.totalUsage, parentLimit, durability);
+            throw new CircuitBreakingException(messageString + boolBlacklisted, memoryUsed.totalUsage, parentLimit, durability);
         }
     }
+
 
     // exposed for tests
     static String buildParentTripMessage(

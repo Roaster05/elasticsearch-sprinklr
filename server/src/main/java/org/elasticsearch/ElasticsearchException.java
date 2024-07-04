@@ -1548,6 +1548,12 @@ public class ElasticsearchException extends RuntimeException implements ToXConte
             org.elasticsearch.action.search.VersionMismatchException::new,
             161,
             Version.V_7_12_0
+        ),
+        ELASTICSEARCH_BLACKLIST_EXCEPTION(
+            org.elasticsearch.ElasticsearchBlacklistException.class,
+            org.elasticsearch.ElasticsearchBlacklistException::new,
+            162,
+            UNKNOWN_VERSION_ADDED
         );
 
         final Class<? extends ElasticsearchException> exceptionClass;

@@ -51,7 +51,7 @@ final class ExpandSearchPhase extends SearchPhase {
             && searchRequest.source().collapse() != null
             && searchRequest.source().collapse().getInnerHits().isEmpty() == false;
     }
-
+    
     @Override
     public void run() {
         if (isCollapseRequest() && searchResponse.hits().getHits().length > 0) {
@@ -100,10 +100,10 @@ final class ExpandSearchPhase extends SearchPhase {
                         hit.getInnerHits().put(innerHitBuilder.getName(), innerHits);
                     }
                 }
-                context.sendSearchResponse(searchResponse, queryResults);
+                context.sendSearchResponseNew(searchResponse, queryResults,context.getRequest());
             }, context::onFailure));
         } else {
-            context.sendSearchResponse(searchResponse, queryResults);
+            context.sendSearchResponseNew(searchResponse, queryResults,context.getRequest());
         }
     }
 

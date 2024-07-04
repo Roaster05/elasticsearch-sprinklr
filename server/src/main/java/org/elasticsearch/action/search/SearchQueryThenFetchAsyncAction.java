@@ -91,13 +91,14 @@ class SearchQueryThenFetchAsyncAction extends AbstractSearchAsyncAction<SearchPh
         );
     }
 
-    @Override
     protected void executePhaseOnShard(
         final SearchShardIterator shardIt,
         final SearchShardTarget shard,
+        final String identifier,
+        final String query,
         final SearchActionListener<SearchPhaseResult> listener
     ) {
-        ShardSearchRequest request = rewriteShardSearchRequest(super.buildShardSearchRequest(shardIt, listener.requestIndex));
+        ShardSearchRequest request = rewriteShardSearchRequest(super.buildShardSearchRequest(shardIt, listener.requestIndex,identifier,query));
         Connection connection = getConnection(shard.getClusterAlias(), shard.getNodeId());
         FieldsOptionSourceAdapter fieldsOptionAdapter = new FieldsOptionSourceAdapter(getRequest());
         fieldsOptionAdapter.adaptRequest(connection.getVersion(), request::source);
